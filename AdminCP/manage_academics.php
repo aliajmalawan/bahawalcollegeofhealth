@@ -5,6 +5,7 @@ session_start([
     'cookie_secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
 ]);
 require_once '../includes/config.php';
+require_once '../includes/course_helper.php';
 
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
     header('Location: login.php');
@@ -85,14 +86,21 @@ if (isset($_POST['save_course'])) {
     $department    = mysqli_real_escape_string($conn, trim($_POST['department'] ?? ''));
     $eligibility   = mysqli_real_escape_string($conn, trim($_POST['eligibility'] ?? ''));
 
+    // admission_info only exists after add_course_admission_info.sql has been run
+    $has_adm_info   = courseAdmissionInfoColumnExists($conn);
+    $admission_info = mysqli_real_escape_string($conn, trim($_POST['admission_info'] ?? ''));
+    $adm_set  = $has_adm_info ? ", admission_info='$admission_info'" : '';
+    $adm_col  = $has_adm_info ? ', admission_info' : '';
+    $adm_val  = $has_adm_info ? ", '$admission_info'" : '';
+
     if (!empty($_POST['course_id'])) {
         $id = intval($_POST['course_id']);
         $query = "UPDATE courses SET name='$name', description='$description', duration='$duration', category='$category', icon='$icon', display_order=$display_order, status='$status',
                    admission_fee=$admission_fee, semester_fee=$semester_fee, fee_period='$fee_period', initial_fee=$initial_fee, total_fee=$total_fee,
-                   affiliation='$affiliation', department='$department', eligibility='$eligibility' WHERE id=$id";
+                   affiliation='$affiliation', department='$department', eligibility='$eligibility'$adm_set WHERE id=$id";
     } else {
-        $query = "INSERT INTO courses (name, description, duration, category, icon, display_order, status, admission_fee, semester_fee, fee_period, initial_fee, total_fee, affiliation, department, eligibility)
-                   VALUES ('$name', '$description', '$duration', '$category', '$icon', $display_order, '$status', $admission_fee, $semester_fee, '$fee_period', $initial_fee, $total_fee, '$affiliation', '$department', '$eligibility')";
+        $query = "INSERT INTO courses (name, description, duration, category, icon, display_order, status, admission_fee, semester_fee, fee_period, initial_fee, total_fee, affiliation, department, eligibility$adm_col)
+                   VALUES ('$name', '$description', '$duration', '$category', '$icon', $display_order, '$status', $admission_fee, $semester_fee, '$fee_period', $initial_fee, $total_fee, '$affiliation', '$department', '$eligibility'$adm_val)";
     }
     if (mysqli_query($conn, $query)) {
         redirectBackAcademics('courses', 'Course saved successfully!');
@@ -157,12 +165,17 @@ if (isset($_POST['save_faculty_cta'])) {
    FACULTY
    ========================================================= */
 if (isset($_POST['save_faculty'])) {
-    $name = mysqli_real_escape_string($conn, $_POST['name']);
+    $name = mysqli_real_escape_string($conn, trim($_POST['name'] ?? ''));
     $designation = mysqli_real_escape_string($conn, trim($_POST['designation'] ?? ''));
     $department = mysqli_real_escape_string($conn, trim($_POST['department'] ?? ''));
     $qualification = mysqli_real_escape_string($conn, trim($_POST['qualification'] ?? ''));
-    $experience = intval($_POST['experience'] ?? 0);
-    $status = mysqli_real_escape_string($conn, $_POST['status']);
+    $specialization = mysqli_real_escape_string($conn, trim($_POST['specialization'] ?? ''));
+    $bio = mysqli_real_escape_string($conn, mb_substr(trim($_POST['bio'] ?? ''), 0, 1500));
+    // Blank experience stays "not provided" (NULL) instead of turning into 0 years
+    $experience = (($_POST['experience'] ?? '') !== '') ? max(0, intval($_POST['experience'])) : 'NULL';
+    $fac_order = intval($_POST['display_order'] ?? 0);
+    $status = ($_POST['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
+    if ($name === '') redirectBackAcademics('faculty', 'Faculty name is required.', true);
 
     $photo_path = '';
     $is_edit = !empty($_POST['faculty_id']);
@@ -175,9 +188,10 @@ if (isset($_POST['save_faculty'])) {
     if (isset($_FILES['photo']) && $_FILES['photo']['error'] == 0) {
         $upload_dir = '../images/faculty/';
         if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
-        $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (in_array($_FILES['photo']['type'], $allowed_types) && $_FILES['photo']['size'] <= 5 * 1024 * 1024) {
-            $extension = pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION);
+        $extension = strtolower(pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION));
+        $img_info = @getimagesize($_FILES['photo']['tmp_name']);
+        $real_ok = $img_info && in_array($img_info['mime'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true);
+        if (in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true) && $real_ok && $_FILES['photo']['size'] <= 5 * 1024 * 1024) {
             $filename = 'faculty_' . time() . '_' . rand(1000, 9999) . '.' . $extension;
             if (move_uploaded_file($_FILES['photo']['tmp_name'], $upload_dir . $filename)) {
                 compressUploadedImage($upload_dir . $filename);
@@ -188,9 +202,9 @@ if (isset($_POST['save_faculty'])) {
     }
 
     if ($is_edit) {
-        $query = "UPDATE faculty SET name='$name', designation='$designation', department='$department', qualification='$qualification', experience=$experience, photo='$photo_path', status='$status' WHERE id=$id";
+        $query = "UPDATE faculty SET name='$name', designation='$designation', department='$department', qualification='$qualification', specialization='$specialization', bio='$bio', experience=$experience, display_order=$fac_order, photo='$photo_path', status='$status' WHERE id=$id";
     } else {
-        $query = "INSERT INTO faculty (name, designation, department, qualification, experience, photo, status) VALUES ('$name', '$designation', '$department', '$qualification', $experience, '$photo_path', '$status')";
+        $query = "INSERT INTO faculty (name, designation, department, qualification, specialization, bio, experience, display_order, photo, status) VALUES ('$name', '$designation', '$department', '$qualification', '$specialization', '$bio', $experience, $fac_order, '$photo_path', '$status')";
     }
     if (mysqli_query($conn, $query)) {
         redirectBackAcademics('faculty', 'Faculty member saved successfully!');
@@ -216,7 +230,7 @@ if (isset($_POST['save_exam_header'])) {
     if (isset($_FILES['exam_header_image']) && $_FILES['exam_header_image']['error'] == 0) {
         $upload_dir = '../images/';
         $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (in_array($_FILES['exam_header_image']['type'], $allowed_types) && $_FILES['exam_header_image']['size'] <= 10 * 1024 * 1024) {
+        if (adminImageUploadOk($_FILES['exam_header_image'], 10 * 1024 * 1024)) {
             $extension = pathinfo($_FILES['exam_header_image']['name'], PATHINFO_EXTENSION);
             $filename = 'exam_header_' . time() . '_' . rand(1000, 9999) . '.' . $extension;
             if (move_uploaded_file($_FILES['exam_header_image']['tmp_name'], $upload_dir . $filename)) {
@@ -525,6 +539,18 @@ $tab_labels = [
                     </div>
                 </div>
 
+                <div class="form-group">
+                    <label for="course_admission_info">Admission Information (shown on the program detail page)</label>
+                    <?php if (courseAdmissionInfoColumnExists($conn)): ?>
+                    <textarea id="course_admission_info" name="admission_info" rows="3" placeholder="e.g., Admissions open in September. Merit list based on F.Sc marks and entry test."><?php echo $edit_course ? htmlspecialchars($edit_course['admission_info'] ?? '') : ''; ?></textarea>
+                    <small style="color:var(--text-light);">Optional. Program-specific admission notes, dates or merit criteria. General admission steps &amp; documents are shown automatically.</small>
+                    <?php else: ?>
+                    <div style="background:#fff8e1;border-left:4px solid #f59e0b;border-radius:8px;padding:10px 14px;font-size:12.5px;">
+                        <i class="fas fa-triangle-exclamation"></i> Run <strong>add_course_admission_info.sql</strong> in phpMyAdmin to enable this field.
+                    </div>
+                    <?php endif; ?>
+                </div>
+
                 <h4 style="color:var(--primary-color);font-size:14px;margin:22px 0 12px;padding-top:16px;border-top:1px solid var(--border-color);">
                     <i class="fas fa-money-check-dollar"></i> Fee Breakdown
                 </h4>
@@ -717,8 +743,11 @@ $tab_labels = [
                     </div>
                     <div class="form-group">
                         <label for="auto_AdminCP_manage_academics_php_60">Department</label>
-                        <input id="auto_AdminCP_manage_academics_php_60" type="text" name="department" value="<?php echo $edit_faculty ? htmlspecialchars($edit_faculty['department']) : ''; ?>" placeholder="e.g., Pharmacy">
-                        <small style="color:var(--text-light);">Used for department filtering on the public Faculty page.</small>
+                        <input id="auto_AdminCP_manage_academics_php_60" type="text" name="department" value="<?php echo $edit_faculty ? htmlspecialchars($edit_faculty['department']) : ''; ?>" placeholder="e.g., Pharmacy" list="facDeptList">
+                        <datalist id="facDeptList">
+                            <?php $fdr = mysqli_query($conn, "SELECT DISTINCT department FROM faculty WHERE department IS NOT NULL AND department <> '' ORDER BY department ASC"); if ($fdr) { while ($fd = mysqli_fetch_assoc($fdr)) echo '<option value="' . htmlspecialchars($fd['department']) . '">'; } ?>
+                        </datalist>
+                        <small style="color:var(--text-light);">Used for department filtering on the public Faculty page — reuse the exact same spelling for colleagues in one department.</small>
                     </div>
                 </div>
                 <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
@@ -728,8 +757,23 @@ $tab_labels = [
                     </div>
                     <div class="form-group">
                         <label for="auto_AdminCP_manage_academics_php_64">Experience (Years)</label>
-                        <input id="auto_AdminCP_manage_academics_php_64" type="number" name="experience" value="<?php echo $edit_faculty ? htmlspecialchars($edit_faculty['experience']) : ''; ?>">
+                        <input id="auto_AdminCP_manage_academics_php_64" type="number" name="experience" min="0" max="70" value="<?php echo $edit_faculty ? htmlspecialchars((string) $edit_faculty['experience']) : ''; ?>" placeholder="Leave blank if not provided">
                     </div>
+                </div>
+                <div style="display:grid;grid-template-columns:2fr 1fr;gap:20px;">
+                    <div class="form-group">
+                        <label for="fac_specialization">Specialization</label>
+                        <input id="fac_specialization" type="text" name="specialization" maxlength="255" value="<?php echo $edit_faculty ? htmlspecialchars($edit_faculty['specialization'] ?? '') : ''; ?>" placeholder="e.g., Clinical Pharmacy, Pharmacology">
+                    </div>
+                    <div class="form-group">
+                        <label for="fac_order">Display Order</label>
+                        <input id="fac_order" type="number" name="display_order" min="0" value="<?php echo $edit_faculty ? (int) $edit_faculty['display_order'] : 0; ?>">
+                        <small style="color:var(--text-light);">Lower numbers appear first (e.g. Principal / HOD = 1).</small>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="fac_bio">Short Biography</label>
+                    <textarea id="fac_bio" name="bio" rows="4" maxlength="1500" placeholder="A few sentences about teaching, clinical or research background — as provided by the faculty member"><?php echo $edit_faculty ? htmlspecialchars($edit_faculty['bio'] ?? '') : ''; ?></textarea>
                 </div>
                 <div class="form-group">
                     <label for="auto_AdminCP_manage_academics_php_66">Photo (leave empty to keep current)</label>
@@ -752,7 +796,7 @@ $tab_labels = [
 
         <div class="card" style="overflow-x:auto;">
             <table class="data-table">
-                <thead><tr><th>Order</th><th>Photo</th><th>Name</th><th>Designation</th><th>Department</th><th>Subjects</th><th>Exp.</th><th>Status</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Order</th><th>Photo</th><th>Name</th><th>Designation</th><th>Department</th><th>Specialization</th><th>Exp.</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>
                 <?php if ($faculty_result && mysqli_num_rows($faculty_result) > 0): ?>
                     <?php while ($member = mysqli_fetch_assoc($faculty_result)): ?>
@@ -768,8 +812,8 @@ $tab_labels = [
                             <td><strong><?php echo htmlspecialchars($member['name']); ?></strong></td>
                             <td><?php echo htmlspecialchars($member['designation']); ?></td>
                             <td><?php echo htmlspecialchars($member['department'] ?: '—'); ?></td>
-                            <td><?php echo htmlspecialchars($member['subjects']); ?></td>
-                            <td><?php echo $member['experience']; ?> yrs</td>
+                            <td><?php echo htmlspecialchars($member['specialization'] ?: '—'); ?></td>
+                            <td><?php echo $member['experience'] !== null ? (int) $member['experience'] . ' yrs' : '—'; ?></td>
                             <td><span class="status-badge status-<?php echo $member['status']; ?>"><?php echo ucfirst($member['status']); ?></span></td>
                             <td>
                                 <a href="?tab=faculty&edit_faculty=<?php echo $member['id']; ?>" class="action-btn btn-edit"><i class="fas fa-edit"></i></a>
@@ -803,7 +847,7 @@ $tab_labels = [
 
                 <div class="card" style="margin-bottom: 25px; box-shadow:none; border:1px solid var(--border-color);">
                     <h2 style="color: var(--primary-color); margin-bottom: 20px;"><i class="fas fa-chart-bar"></i> Stats Bar</h2>
-                    <p style="color:var(--text-light);font-size:12.5px;margin:-6px 0 15px;">Note: the first stat ("Expert Teachers" count) is calculated automatically from active faculty members and isn't editable here.</p>
+                    <p style="color:var(--text-light);font-size:12.5px;margin:-6px 0 15px;">Note: the first stat (number of faculty members) is calculated automatically from active faculty. <strong>Leave a number blank to hide that stat</strong> and only enter verified figures &mdash; if Stat 2 is blank, the page shows the average experience calculated from faculty profiles.</p>
                     <form method="POST"><?php echo csrf_field(); ?>
                         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;">
                             <div>

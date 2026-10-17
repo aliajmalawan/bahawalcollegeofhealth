@@ -1,5 +1,6 @@
 <?php
 require_once 'includes/config.php';
+require_once 'includes/course_helper.php';
 $page_title = 'Home';
 $page_description = 'Bahawal College of Health Sciences offers quality Doctor of Pharmacy, Physical Therapy and Medical Lab Technology programs with expert faculty and modern facilities.';
 ?>
@@ -760,10 +761,13 @@ if ($notifications && mysqli_num_rows($notifications) > 0):
     </div>
 </section>
 
+<!-- ===== LEADERSHIP SECTION ===== -->
+<?php include 'includes/leadership_section.php'; ?>
+
 <!-- ===== PROGRAMS TEASER ===== -->
 <?php
 $home_courses = [];
-$hcr = mysqli_query($conn, "SELECT id, name, category, icon, duration, total_fee, admission_fee FROM courses WHERE status='active' ORDER BY display_order ASC, name ASC LIMIT 6");
+$hcr = mysqli_query($conn, "SELECT id, name, category, icon, duration, department, affiliation, admission_fee, initial_fee, semester_fee, fee_period, total_fee FROM courses WHERE status='active' ORDER BY display_order ASC, name ASC LIMIT 6");
 if ($hcr) { while ($row = mysqli_fetch_assoc($hcr)) { $home_courses[] = $row; } }
 ?>
 <?php if (!empty($home_courses)): ?>
@@ -782,6 +786,18 @@ if ($hcr) { while ($row = mysqli_fetch_assoc($hcr)) { $home_courses[] = $row; } 
 .hp-prog-meta { font-size:12px; color:var(--text-light); display:flex; flex-wrap:wrap; gap:10px; }
 .hp-prog-meta span { display:flex; align-items:center; gap:5px; }
 .hp-more-link { text-align:center; margin-top:34px; }
+.hp-prog-card { display:flex; flex-direction:column; }
+.hp-prog-card h4 a { color:inherit; text-decoration:none; }
+.hp-prog-card h4 a:hover { color:var(--primary-color); }
+.hp-prog-aff { font-size:12px; color:var(--text-light); margin:8px 0 0; line-height:1.5; }
+.hp-prog-aff i { color:var(--primary-color); margin-right:4px; }
+.hp-prog-fee { margin-top:14px; padding-top:12px; border-top:1px dashed rgba(23,22,91,0.15); font-size:12.5px; }
+.hp-prog-fee-row { display:flex; justify-content:space-between; gap:10px; padding:2px 0; color:var(--text-light); }
+.hp-prog-fee-row strong { color:var(--text-dark); }
+.hp-prog-fee-row.hp-total strong { color:var(--primary-color); font-size:13.5px; }
+.hp-prog-fee-note { font-size:10.5px; color:#DC2626; margin-top:6px; line-height:1.45; }
+.hp-prog-link { margin-top:auto; padding-top:14px; font-size:13px; font-weight:700; color:var(--primary-color); text-decoration:none; display:inline-flex; align-items:center; gap:6px; }
+.hp-prog-link:hover { gap:9px; }
 </style>
 <section class="hp-programs">
     <div class="container">
@@ -791,18 +807,425 @@ if ($hcr) { while ($row = mysqli_fetch_assoc($hcr)) { $home_courses[] = $row; } 
             <p>Real, currently offered programs at <?php echo htmlspecialchars(getSiteName()); ?>.</p>
         </div>
         <div class="hp-prog-grid">
-            <?php foreach ($home_courses as $c): ?>
+            <?php foreach ($home_courses as $c): $c_link = 'course.php?id=' . (int)$c['id']; $c_period = getCourseFeePeriodLabels($c); ?>
             <div class="hp-prog-card">
                 <div class="hp-prog-icon"><i class="fas <?php echo htmlspecialchars($c['icon'] ?: 'fa-book'); ?>"></i></div>
-                <h4><?php echo htmlspecialchars($c['name']); ?></h4>
+                <h4><a href="<?php echo $c_link; ?>"><?php echo htmlspecialchars($c['name']); ?></a></h4>
                 <div class="hp-prog-meta">
                     <?php if (!empty($c['duration'])): ?><span><i class="fas fa-clock"></i> <?php echo htmlspecialchars($c['duration']); ?></span><?php endif; ?>
-                    <?php if (!empty($c['category'])): ?><span><i class="fas fa-tag"></i> <?php echo htmlspecialchars($c['category']); ?></span><?php endif; ?>
+                    <?php if (!empty($c['department'])): ?><span><i class="fas fa-building-columns"></i> <?php echo htmlspecialchars($c['department']); ?></span><?php endif; ?>
                 </div>
+                <?php if (!empty($c['affiliation'])): ?>
+                <div class="hp-prog-aff"><i class="fas fa-certificate"></i> <?php echo htmlspecialchars($c['affiliation']); ?></div>
+                <?php endif; ?>
+                <div class="hp-prog-fee">
+                    <?php if (courseHasFeeData($c)): ?>
+                        <?php if ($c['admission_fee'] !== null): ?><div class="hp-prog-fee-row"><span>Admission Fee</span><strong><?php echo formatCourseFee($c['admission_fee']); ?></strong></div><?php endif; ?>
+                        <?php if ($c['semester_fee'] !== null): ?><div class="hp-prog-fee-row"><span><?php echo $c_period['label']; ?></span><strong><?php echo formatCourseFee($c['semester_fee']); ?></strong></div><?php endif; ?>
+                        <?php if ($c['total_fee'] !== null): ?><div class="hp-prog-fee-row hp-total"><span>Total Fee</span><strong><?php echo formatCourseFee($c['total_fee']); ?></strong></div><?php endif; ?>
+                        <div class="hp-prog-fee-note">Exam, verification &amp; university charges not included</div>
+                    <?php else: ?>
+                        <div class="hp-prog-fee-row"><span>Fee</span><strong>Contact admission office</strong></div>
+                    <?php endif; ?>
+                </div>
+                <a href="<?php echo $c_link; ?>" class="hp-prog-link">View Details &amp; Full Fee <i class="fas fa-arrow-right"></i></a>
             </div>
             <?php endforeach; ?>
         </div>
         <div class="hp-more-link"><a href="courses.php" class="hp-btn"><i class="fas fa-arrow-right"></i> View All Programs</a></div>
+    </div>
+</section>
+<?php endif; ?>
+
+<!-- ===== WHY CHOOSE US ===== -->
+<style>
+.wcu-section { padding:68px 0 64px; background:#fff; }
+
+/* Split layout */
+.wcu-inner {
+    display:grid;
+    grid-template-columns:1fr 1.65fr;
+    gap:52px;
+    align-items:center;
+}
+
+/* Left panel */
+.wcu-badge {
+    display:inline-flex; align-items:center; gap:7px;
+    background:rgba(23,22,91,0.08); border:1px solid rgba(23,22,91,0.22);
+    color:var(--primary-color); padding:6px 18px; border-radius:50px;
+    font-size:10.5px; font-weight:700; letter-spacing:2px;
+    text-transform:uppercase; margin-bottom:18px;
+}
+.wcu-title {
+    font-size:34px; font-weight:800; color:var(--text-dark);
+    line-height:1.22; margin:0 0 14px;
+}
+.wcu-title span { color:var(--primary-color); }
+.wcu-sub {
+    color:var(--text-light); font-size:14.5px;
+    line-height:1.72; margin:0 0 26px; max-width:340px;
+}
+.wcu-stats {
+    display:flex; gap:24px; margin-bottom:28px;
+}
+.wcu-stat-num {
+    font-size:26px; font-weight:800; color:var(--primary-color); line-height:1;
+}
+.wcu-stat-lbl {
+    font-size:11px; color:var(--text-light); margin-top:3px; line-height:1.3;
+}
+.wcu-apply {
+    display:inline-flex; align-items:center; gap:9px;
+    background:var(--primary-color); color:#fff;
+    padding:11px 28px; border-radius:10px; font-size:14px; font-weight:700;
+    text-decoration:none;
+    transition:all 0.3s cubic-bezier(0.25,1,0.5,1);
+}
+.wcu-apply:hover {
+    background:#0D1048; transform:translateY(-2px);
+    box-shadow:0 10px 28px rgba(23,22,91,0.3); color:#fff;
+}
+
+/* Right tile grid */
+.wcu-grid {
+    display:grid; grid-template-columns:repeat(3,1fr);
+    border:1px solid rgba(23,22,91,0.12);
+    border-radius:20px; overflow:hidden;
+}
+.wcu-tile {
+    padding:22px 18px 20px;
+    border-right:1px solid rgba(23,22,91,0.12);
+    border-bottom:1px solid rgba(23,22,91,0.12);
+    transition:background 0.3s ease, box-shadow 0.3s ease;
+    position:relative; overflow:hidden;
+    opacity:0; transform:translateY(28px);
+}
+.wcu-tile.wcu-in {
+    animation:wcuIn 0.55s cubic-bezier(0.22,1,0.36,1) both;
+}
+@keyframes wcuIn {
+    from { opacity:0; transform:translateY(28px); }
+    to   { opacity:1; transform:translateY(0); }
+}
+/* Remove right border on 3rd column */
+.wcu-tile:nth-child(3n) { border-right:none; }
+/* Remove bottom border on last row (items 4,5,6) */
+.wcu-tile:nth-child(n+4) { border-bottom:none; }
+
+.wcu-tile::before {
+    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+    transform:scaleX(0); transform-origin:left;
+    transition:transform 0.4s ease;
+}
+.wcu-tile:hover { background:rgba(23,22,91,0.04); }
+.wcu-tile:hover::before { transform:scaleX(1); }
+
+.wcu-ico {
+    width:44px; height:44px; border-radius:12px;
+    display:flex; align-items:center; justify-content:center;
+    font-size:19px; margin-bottom:12px;
+    transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+.wcu-tile:hover .wcu-ico { transform:scale(1.12) rotate(-5deg); }
+.wcu-tile h4 {
+    color:var(--text-dark); font-size:13.5px; font-weight:700;
+    margin:0 0 5px; line-height:1.3;
+}
+.wcu-tile p {
+    color:var(--text-light); font-size:11.5px;
+    margin:0; line-height:1.55;
+}
+
+@media(max-width:900px) {
+    .wcu-inner { grid-template-columns:1fr; gap:36px; }
+    .wcu-title { font-size:28px; }
+    .wcu-sub { max-width:100%; }
+    .wcu-grid { grid-template-columns:repeat(2,1fr); }
+    .wcu-tile:nth-child(3n) { border-right:1px solid rgba(23,22,91,0.12); }
+    .wcu-tile:nth-child(2n) { border-right:none; }
+    .wcu-tile:nth-child(n+4) { border-bottom:1px solid rgba(23,22,91,0.12); }
+    .wcu-tile:nth-child(n+5) { border-bottom:none; }
+}
+@media(max-width:480px) {
+    .wcu-grid { grid-template-columns:1fr; }
+    .wcu-tile { border-right:none !important; }
+    .wcu-tile:last-child { border-bottom:none; }
+}
+</style>
+
+<section class="wcu-section">
+    <div class="container">
+        <div class="wcu-inner">
+
+            <!-- Left: Heading panel -->
+            <?php $wcu_header = getWcuHeader(); ?>
+            <div class="wcu-left" id="wcuLeft">
+                <div class="wcu-badge">
+                    <i class="fas fa-award" style="font-size:9px;"></i>
+                    <?php echo htmlspecialchars($wcu_header['badge']); ?>
+                </div>
+                <h2 class="wcu-title">
+                    Why Choose<br><span><?php echo SITE_NAME; ?>?</span>
+                </h2>
+                <p class="wcu-sub">
+                    <?php echo htmlspecialchars($wcu_header['description']); ?>
+                </p>
+                <div class="wcu-stats">
+                <?php $wcu_stats = getWcuStats(); ?>
+                <?php foreach ($wcu_stats as $i => $s): ?>
+                    <?php if ($i > 0): ?><div style="width:1px;background:rgba(23,22,91,0.15);"></div><?php endif; ?>
+                    <div>
+                        <div class="wcu-stat-num"><?php echo htmlspecialchars($s['number']); ?></div>
+                        <div class="wcu-stat-lbl"><?php echo htmlspecialchars($s['label']); ?></div>
+                    </div>
+                <?php endforeach; ?>
+                </div>
+                <a href="admission.php" class="wcu-apply">
+                    <i class="fas fa-graduation-cap"></i> Apply Now
+                </a>
+            </div>
+
+            <!-- Right: Feature tile grid -->
+            <div class="wcu-grid">
+            <?php
+            $why = getWhyChooseUs();
+            foreach($why as $i => $w):
+            ?>
+                <div class="wcu-tile" data-wcu-delay="<?php echo $i*80; ?>">
+                    <style>.wcu-tile:nth-child(<?php echo $i+1; ?>)::before{background:<?php echo htmlspecialchars($w['color']); ?>;}</style>
+                    <div class="wcu-ico" style="background:<?php echo hexToRgba($w['color'], 0.1); ?>;">
+                        <i class="<?php echo htmlspecialchars($w['icon']); ?>" style="color:<?php echo htmlspecialchars($w['color']); ?>;"></i>
+                    </div>
+                    <h4><?php echo htmlspecialchars($w['title']); ?></h4>
+                    <p><?php echo htmlspecialchars($w['description']); ?></p>
+                </div>
+            <?php endforeach; ?>
+            </div>
+
+        </div>
+    </div>
+</section>
+
+<script>
+(function(){
+    var tiles = document.querySelectorAll('.wcu-tile');
+    if (!tiles.length) return;
+    var obs = new IntersectionObserver(function(entries){
+        entries.forEach(function(e){
+            if (!e.isIntersecting) return;
+            var el = e.target;
+            setTimeout(function(){ el.classList.add('wcu-in'); },
+                       parseInt(el.dataset.wcuDelay)||0);
+            obs.unobserve(el);
+        });
+    },{threshold:0.1});
+    tiles.forEach(function(t){ obs.observe(t); });
+
+    /* Left panel fade-in */
+    var lp = document.getElementById('wcuLeft');
+    if(lp){
+        var lo = new IntersectionObserver(function(entries){
+            if(entries[0].isIntersecting){
+                lp.style.transition='opacity 0.7s ease,transform 0.7s ease';
+                lp.style.opacity='1'; lp.style.transform='translateY(0)';
+                lo.disconnect();
+            }
+        },{threshold:0.15});
+        lp.style.opacity='0'; lp.style.transform='translateY(30px)';
+        lo.observe(lp);
+    }
+})();
+</script>
+
+<!-- ===== OUR INSTITUTE EXPLORE GRID ===== -->
+<style>
+.hp-institute { padding:70px 0; background:#F5F9FC; }
+.hp-inst-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:16px; }
+@media (max-width:1000px) { .hp-inst-grid { grid-template-columns:repeat(3,1fr); } }
+@media (max-width:600px) { .hp-inst-grid { grid-template-columns:1fr 1fr; } }
+.hp-inst-card {
+    background:#fff; border-radius:16px; border:1px solid rgba(23,22,91,0.1);
+    padding:26px 18px; text-align:center; text-decoration:none;
+    transition:transform 0.3s ease, box-shadow 0.3s ease;
+}
+.hp-inst-card:hover { transform:translateY(-4px); box-shadow:0 14px 34px rgba(23,22,91,0.1); }
+.hp-inst-icon { width:50px; height:50px; border-radius:12px; margin:0 auto 14px; background:rgba(23,22,91,0.08); display:flex; align-items:center; justify-content:center; color:var(--primary-color); font-size:20px; }
+.hp-inst-card h4 { font-size:13.5px; font-weight:800; color:var(--text-dark); margin:0 0 6px; }
+.hp-inst-card p { font-size:11.5px; color:var(--text-light); line-height:1.6; margin:0; }
+</style>
+<section class="hp-institute">
+    <div class="container">
+        <div class="hp-sh">
+            <div class="hp-sh-badge"><i class="fas fa-building-columns" style="font-size:9px;"></i> Our Institute</div>
+            <h2>Clinical Training &amp; <span>Our Institute</span></h2>
+            <p>Clinical training, affiliations, partnerships, projects and our welfare foundation.</p>
+        </div>
+        <div class="hp-inst-grid">
+            <a href="clinical-training.php" class="hp-inst-card">
+                <div class="hp-inst-icon"><i class="fas fa-hospital"></i></div>
+                <h4>Clinical Training</h4>
+                <p>Hospitals &amp; training sites</p>
+            </a>
+            <a href="our-networks.php" class="hp-inst-card">
+                <div class="hp-inst-icon"><i class="fas fa-diagram-project"></i></div>
+                <h4>Our Networks</h4>
+                <p>Academic &amp; industry partners</p>
+            </a>
+            <a href="our-projects.php" class="hp-inst-card">
+                <div class="hp-inst-icon"><i class="fas fa-lightbulb"></i></div>
+                <h4>Our Projects</h4>
+                <p>Ongoing &amp; completed initiatives</p>
+            </a>
+            <a href="accreditation.php" class="hp-inst-card">
+                <div class="hp-inst-icon"><i class="fas fa-certificate"></i></div>
+                <h4>Affiliations &amp; Accreditation</h4>
+                <p>Affiliation &amp; accreditation records</p>
+            </a>
+            <a href="foundation.php" class="hp-inst-card">
+                <div class="hp-inst-icon"><i class="fas fa-hand-holding-heart"></i></div>
+                <h4>Welfare Foundation</h4>
+                <p>Welfare activities &amp; projects</p>
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- ===== SCHOLARSHIPS & MERIT FORMULA TEASER ===== -->
+<?php
+$home_scholarship_count = 0;
+$hsr = mysqli_query($conn, "SELECT COUNT(*) AS c FROM scholarships WHERE status='active'");
+if ($hsr) { $home_scholarship_count = (int) mysqli_fetch_assoc($hsr)['c']; }
+$home_merit_tiers = getMeritScholarshipTiers();
+?>
+<style>
+.hp-sch { padding:70px 0; background:#fff; }
+.hp-merit-strip { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-bottom:28px; }
+.hp-merit-pill {
+    display:flex; flex-direction:column; align-items:center; gap:2px;
+    background:#F5F9FC; border:1px solid rgba(23,22,91,0.1); border-radius:14px;
+    padding:14px 20px; min-width:110px;
+}
+.hp-merit-pill .pct { font-size:20px; font-weight:800; color:var(--primary-color); }
+.hp-merit-pill .rng { font-size:11px; color:var(--text-light); text-align:center; }
+.hp-sch-note { text-align:center; color:var(--text-light); font-size:13px; margin:0 0 30px; }
+</style>
+<section class="hp-sch">
+    <div class="container">
+        <div class="hp-sh">
+            <div class="hp-sh-badge"><i class="fas fa-award" style="font-size:9px;"></i> Scholarships</div>
+            <h2>Merit Scholarship <span>Formula</span></h2>
+            <p>The same percentage tiers apply across University, Diploma and F.Sc programs.</p>
+        </div>
+        <div class="hp-merit-strip">
+            <?php foreach ($home_merit_tiers as $tier): ?>
+            <div class="hp-merit-pill"><span class="pct"><?php echo (int) $tier['pct']; ?>%</span><span class="rng"><?php echo htmlspecialchars($tier['range']); ?></span></div>
+            <?php endforeach; ?>
+        </div>
+        <?php if ($home_scholarship_count > 0): ?>
+        <p class="hp-sch-note"><?php echo $home_scholarship_count; ?> more scholarship<?php echo $home_scholarship_count === 1 ? ' is' : 's are'; ?> also available — see the Scholarships page for eligibility and how to apply.</p>
+        <?php endif; ?>
+        <div class="hp-more-link" style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+            <a href="scholarships.php#calculator" class="hp-btn"><i class="fas fa-calculator"></i> Calculate My Scholarship</a>
+            <a href="scholarships.php" class="hp-btn" style="background:#fff;color:var(--primary-color);border:1px solid rgba(23,22,91,0.25);"><i class="fas fa-arrow-right"></i> View Scholarships</a>
+        </div>
+    </div>
+</section>
+
+<!-- ===== FACULTY TEASER ===== -->
+<?php
+$home_faculty = [];
+$hfr = mysqli_query($conn, "SELECT name, designation, department, photo, icon FROM faculty WHERE status='active' ORDER BY display_order ASC LIMIT 4");
+if ($hfr) { while ($row = mysqli_fetch_assoc($hfr)) { $home_faculty[] = $row; } }
+?>
+<?php if (!empty($home_faculty)): ?>
+<style>
+.hp-faculty { padding:70px 0; background:#fff; }
+.hp-fac-grid { display:flex; flex-wrap:wrap; justify-content:center; gap:20px; }
+.hp-fac-card {
+    background:#F5F9FC; border:1px solid rgba(23,22,91,0.1); border-radius:16px;
+    padding:24px 18px; text-align:center;
+    flex:1 1 220px; max-width:250px;
+    transition:transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.hp-fac-card:hover { transform:translateY(-6px); box-shadow:0 16px 34px rgba(23,22,91,0.1); border-color:rgba(23,22,91,0.2); }
+.hp-fac-avatar { width:74px; height:74px; border-radius:50%; margin:0 auto 12px; overflow:hidden; background:linear-gradient(135deg,var(--primary-color),#0D1048); display:flex; align-items:center; justify-content:center; color:#fff; font-size:26px; }
+.hp-fac-avatar img { width:100%; height:100%; object-fit:cover; }
+.hp-fac-card h4 { font-size:14px; font-weight:800; color:var(--text-dark); margin:0 0 4px; }
+.hp-fac-desig { font-size:11.5px; color:var(--primary-color); font-weight:600; }
+</style>
+<section class="hp-faculty">
+    <div class="container">
+        <div class="hp-sh">
+            <div class="hp-sh-badge"><i class="fas fa-chalkboard-teacher" style="font-size:9px;"></i> Our Faculty</div>
+            <h2>Meet Our <span>Faculty</span></h2>
+        </div>
+        <div class="hp-fac-grid">
+            <?php foreach ($home_faculty as $f): ?>
+            <div class="hp-fac-card">
+                <div class="hp-fac-avatar">
+                    <?php if (!empty($f['photo'])): ?>
+                        <img src="<?php echo htmlspecialchars($f['photo']); ?>" alt="<?php echo htmlspecialchars($f['name']); ?>" loading="lazy">
+                    <?php else: ?>
+                        <i class="fas <?php echo htmlspecialchars($f['icon'] ?: 'fa-chalkboard-teacher'); ?>"></i>
+                    <?php endif; ?>
+                </div>
+                <h4><?php echo htmlspecialchars($f['name']); ?></h4>
+                <div class="hp-fac-desig"><?php echo htmlspecialchars($f['designation']); ?></div>
+            </div>
+            <?php endforeach; ?>
+        </div>
+        <div class="hp-more-link"><a href="faculty.php" class="hp-btn"><i class="fas fa-arrow-right"></i> Meet All Faculty</a></div>
+    </div>
+</section>
+<?php endif; ?>
+
+<!-- ===== ACTIVITIES TEASER ===== -->
+<?php
+$home_activities = [];
+// Upcoming activities first (soonest first), topped up with the most recent past ones
+$har = mysqli_query($conn, "(SELECT title, category, event_date, image, 1 AS upcoming FROM events WHERE status='active' AND event_date >= CURDATE() ORDER BY event_date ASC LIMIT 3)
+                            UNION ALL (SELECT title, category, event_date, image, 0 AS upcoming FROM events WHERE status='active' AND event_date < CURDATE() ORDER BY event_date DESC LIMIT 3)");
+if ($har) { while ($row = mysqli_fetch_assoc($har)) { if (count($home_activities) < 3) $home_activities[] = $row; } }
+$home_act_labels = ['sports' => 'Sports', 'seminar' => 'Seminar', 'workshop' => 'Workshop', 'competition' => 'Competition', 'cultural' => 'Cultural', 'community' => 'Community', 'general' => 'General'];
+?>
+<?php if (!empty($home_activities)): ?>
+<style>
+.hp-act { padding:70px 0; background:#F5F9FC; }
+.hp-act-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
+@media (max-width:900px) { .hp-act-grid { grid-template-columns:1fr; } }
+.hp-act-card { background:#fff; border-radius:14px; border:1px solid rgba(23,22,91,0.1); overflow:hidden; text-decoration:none; display:block; transition:transform 0.3s ease, box-shadow 0.3s ease; }
+.hp-act-card:hover { transform:translateY(-4px); box-shadow:0 14px 34px rgba(23,22,91,0.1); }
+.hp-act-img { height:150px; background:linear-gradient(135deg,var(--primary-color),#0D1048); display:flex; align-items:center; justify-content:center; color:rgba(255,255,255,0.4); font-size:30px; position:relative; }
+.hp-act-img img { width:100%; height:100%; object-fit:cover; }
+.hp-act-flag { position:absolute; top:10px; left:10px; background:#F59E0B; color:#fff; font-size:10px; font-weight:700; letter-spacing:0.5px; text-transform:uppercase; padding:3px 9px; border-radius:50px; }
+.hp-act-body { padding:16px 18px 18px; }
+.hp-act-cat { font-size:10.5px; font-weight:700; letter-spacing:0.6px; text-transform:uppercase; color:var(--accent-color); margin-bottom:4px; }
+.hp-act-card h4 { font-size:14.5px; font-weight:800; color:var(--text-dark); margin:0 0 6px; }
+.hp-act-date { font-size:11.5px; color:var(--text-light); }
+</style>
+<section class="hp-act">
+    <div class="container">
+        <div class="hp-sh">
+            <div class="hp-sh-badge"><i class="fas fa-star" style="font-size:9px;"></i> Student Life</div>
+            <h2>Extra-Curricular <span>Activities</span></h2>
+        </div>
+        <div class="hp-act-grid">
+            <?php foreach ($home_activities as $a): ?>
+            <a class="hp-act-card" href="activities.php?category=<?php echo urlencode($a['category']); ?>">
+                <div class="hp-act-img">
+                    <?php if (!empty($a['image'])): ?><img src="<?php echo htmlspecialchars($a['image']); ?>" alt="<?php echo htmlspecialchars($a['title']); ?>" loading="lazy"><?php else: ?><i class="fas fa-star"></i><?php endif; ?>
+                    <?php if ($a['upcoming']): ?><span class="hp-act-flag">Upcoming</span><?php endif; ?>
+                </div>
+                <div class="hp-act-body">
+                    <div class="hp-act-cat"><?php echo htmlspecialchars($home_act_labels[$a['category']] ?? 'Activity'); ?></div>
+                    <h4><?php echo htmlspecialchars($a['title']); ?></h4>
+                    <div class="hp-act-date"><i class="fas fa-calendar-days"></i> <?php echo date('d M Y', strtotime($a['event_date'])); ?></div>
+                </div>
+            </a>
+            <?php endforeach; ?>
+        </div>
+        <div class="hp-more-link"><a href="activities.php" class="hp-btn"><i class="fas fa-arrow-right"></i> View All Activities</a></div>
     </div>
 </section>
 <?php endif; ?>
@@ -1058,383 +1481,6 @@ if ($hcr) { while ($row = mysqli_fetch_assoc($hcr)) { $home_courses[] = $row; } 
 })();
 </script>
 
-<!-- ===== LEADERSHIP SECTION ===== -->
-<?php include 'includes/leadership_section.php'; ?>
-
-<!-- ===== WHY CHOOSE US ===== -->
-<style>
-.wcu-section { padding:68px 0 64px; background:#fff; }
-
-/* Split layout */
-.wcu-inner {
-    display:grid;
-    grid-template-columns:1fr 1.65fr;
-    gap:52px;
-    align-items:center;
-}
-
-/* Left panel */
-.wcu-badge {
-    display:inline-flex; align-items:center; gap:7px;
-    background:rgba(23,22,91,0.08); border:1px solid rgba(23,22,91,0.22);
-    color:var(--primary-color); padding:6px 18px; border-radius:50px;
-    font-size:10.5px; font-weight:700; letter-spacing:2px;
-    text-transform:uppercase; margin-bottom:18px;
-}
-.wcu-title {
-    font-size:34px; font-weight:800; color:var(--text-dark);
-    line-height:1.22; margin:0 0 14px;
-}
-.wcu-title span { color:var(--primary-color); }
-.wcu-sub {
-    color:var(--text-light); font-size:14.5px;
-    line-height:1.72; margin:0 0 26px; max-width:340px;
-}
-.wcu-stats {
-    display:flex; gap:24px; margin-bottom:28px;
-}
-.wcu-stat-num {
-    font-size:26px; font-weight:800; color:var(--primary-color); line-height:1;
-}
-.wcu-stat-lbl {
-    font-size:11px; color:var(--text-light); margin-top:3px; line-height:1.3;
-}
-.wcu-apply {
-    display:inline-flex; align-items:center; gap:9px;
-    background:var(--primary-color); color:#fff;
-    padding:11px 28px; border-radius:10px; font-size:14px; font-weight:700;
-    text-decoration:none;
-    transition:all 0.3s cubic-bezier(0.25,1,0.5,1);
-}
-.wcu-apply:hover {
-    background:#0D1048; transform:translateY(-2px);
-    box-shadow:0 10px 28px rgba(23,22,91,0.3); color:#fff;
-}
-
-/* Right tile grid */
-.wcu-grid {
-    display:grid; grid-template-columns:repeat(3,1fr);
-    border:1px solid rgba(23,22,91,0.12);
-    border-radius:20px; overflow:hidden;
-}
-.wcu-tile {
-    padding:22px 18px 20px;
-    border-right:1px solid rgba(23,22,91,0.12);
-    border-bottom:1px solid rgba(23,22,91,0.12);
-    transition:background 0.3s ease, box-shadow 0.3s ease;
-    position:relative; overflow:hidden;
-    opacity:0; transform:translateY(28px);
-}
-.wcu-tile.wcu-in {
-    animation:wcuIn 0.55s cubic-bezier(0.22,1,0.36,1) both;
-}
-@keyframes wcuIn {
-    from { opacity:0; transform:translateY(28px); }
-    to   { opacity:1; transform:translateY(0); }
-}
-/* Remove right border on 3rd column */
-.wcu-tile:nth-child(3n) { border-right:none; }
-/* Remove bottom border on last row (items 4,5,6) */
-.wcu-tile:nth-child(n+4) { border-bottom:none; }
-
-.wcu-tile::before {
-    content:''; position:absolute; top:0; left:0; right:0; height:2px;
-    transform:scaleX(0); transform-origin:left;
-    transition:transform 0.4s ease;
-}
-.wcu-tile:hover { background:rgba(23,22,91,0.04); }
-.wcu-tile:hover::before { transform:scaleX(1); }
-
-.wcu-ico {
-    width:44px; height:44px; border-radius:12px;
-    display:flex; align-items:center; justify-content:center;
-    font-size:19px; margin-bottom:12px;
-    transition:transform 0.4s cubic-bezier(0.34,1.56,0.64,1);
-}
-.wcu-tile:hover .wcu-ico { transform:scale(1.12) rotate(-5deg); }
-.wcu-tile h4 {
-    color:var(--text-dark); font-size:13.5px; font-weight:700;
-    margin:0 0 5px; line-height:1.3;
-}
-.wcu-tile p {
-    color:var(--text-light); font-size:11.5px;
-    margin:0; line-height:1.55;
-}
-
-@media(max-width:900px) {
-    .wcu-inner { grid-template-columns:1fr; gap:36px; }
-    .wcu-title { font-size:28px; }
-    .wcu-sub { max-width:100%; }
-    .wcu-grid { grid-template-columns:repeat(2,1fr); }
-    .wcu-tile:nth-child(3n) { border-right:1px solid rgba(23,22,91,0.12); }
-    .wcu-tile:nth-child(2n) { border-right:none; }
-    .wcu-tile:nth-child(n+4) { border-bottom:1px solid rgba(23,22,91,0.12); }
-    .wcu-tile:nth-child(n+5) { border-bottom:none; }
-}
-@media(max-width:480px) {
-    .wcu-grid { grid-template-columns:1fr; }
-    .wcu-tile { border-right:none !important; }
-    .wcu-tile:last-child { border-bottom:none; }
-}
-</style>
-
-<section class="wcu-section">
-    <div class="container">
-        <div class="wcu-inner">
-
-            <!-- Left: Heading panel -->
-            <?php $wcu_header = getWcuHeader(); ?>
-            <div class="wcu-left" id="wcuLeft">
-                <div class="wcu-badge">
-                    <i class="fas fa-award" style="font-size:9px;"></i>
-                    <?php echo htmlspecialchars($wcu_header['badge']); ?>
-                </div>
-                <h2 class="wcu-title">
-                    Why Choose<br><span><?php echo SITE_NAME; ?>?</span>
-                </h2>
-                <p class="wcu-sub">
-                    <?php echo htmlspecialchars($wcu_header['description']); ?>
-                </p>
-                <div class="wcu-stats">
-                <?php $wcu_stats = getWcuStats(); ?>
-                <?php foreach ($wcu_stats as $i => $s): ?>
-                    <?php if ($i > 0): ?><div style="width:1px;background:rgba(23,22,91,0.15);"></div><?php endif; ?>
-                    <div>
-                        <div class="wcu-stat-num"><?php echo htmlspecialchars($s['number']); ?></div>
-                        <div class="wcu-stat-lbl"><?php echo htmlspecialchars($s['label']); ?></div>
-                    </div>
-                <?php endforeach; ?>
-                </div>
-                <a href="admission.php" class="wcu-apply">
-                    <i class="fas fa-graduation-cap"></i> Apply Now
-                </a>
-            </div>
-
-            <!-- Right: Feature tile grid -->
-            <div class="wcu-grid">
-            <?php
-            $why = getWhyChooseUs();
-            foreach($why as $i => $w):
-            ?>
-                <div class="wcu-tile" data-wcu-delay="<?php echo $i*80; ?>">
-                    <style>.wcu-tile:nth-child(<?php echo $i+1; ?>)::before{background:<?php echo htmlspecialchars($w['color']); ?>;}</style>
-                    <div class="wcu-ico" style="background:<?php echo hexToRgba($w['color'], 0.1); ?>;">
-                        <i class="<?php echo htmlspecialchars($w['icon']); ?>" style="color:<?php echo htmlspecialchars($w['color']); ?>;"></i>
-                    </div>
-                    <h4><?php echo htmlspecialchars($w['title']); ?></h4>
-                    <p><?php echo htmlspecialchars($w['description']); ?></p>
-                </div>
-            <?php endforeach; ?>
-            </div>
-
-        </div>
-    </div>
-</section>
-
-<script>
-(function(){
-    var tiles = document.querySelectorAll('.wcu-tile');
-    if (!tiles.length) return;
-    var obs = new IntersectionObserver(function(entries){
-        entries.forEach(function(e){
-            if (!e.isIntersecting) return;
-            var el = e.target;
-            setTimeout(function(){ el.classList.add('wcu-in'); },
-                       parseInt(el.dataset.wcuDelay)||0);
-            obs.unobserve(el);
-        });
-    },{threshold:0.1});
-    tiles.forEach(function(t){ obs.observe(t); });
-
-    /* Left panel fade-in */
-    var lp = document.getElementById('wcuLeft');
-    if(lp){
-        var lo = new IntersectionObserver(function(entries){
-            if(entries[0].isIntersecting){
-                lp.style.transition='opacity 0.7s ease,transform 0.7s ease';
-                lp.style.opacity='1'; lp.style.transform='translateY(0)';
-                lo.disconnect();
-            }
-        },{threshold:0.15});
-        lp.style.opacity='0'; lp.style.transform='translateY(30px)';
-        lo.observe(lp);
-    }
-})();
-</script>
-
-<!-- ===== FACULTY TEASER ===== -->
-<?php
-$home_faculty = [];
-$hfr = mysqli_query($conn, "SELECT name, designation, department, photo, icon FROM faculty WHERE status='active' ORDER BY display_order ASC LIMIT 4");
-if ($hfr) { while ($row = mysqli_fetch_assoc($hfr)) { $home_faculty[] = $row; } }
-?>
-<?php if (!empty($home_faculty)): ?>
-<style>
-.hp-faculty { padding:70px 0; background:#fff; }
-.hp-fac-grid { display:flex; flex-wrap:wrap; justify-content:center; gap:20px; }
-.hp-fac-card {
-    background:#F5F9FC; border:1px solid rgba(23,22,91,0.1); border-radius:16px;
-    padding:24px 18px; text-align:center;
-    flex:1 1 220px; max-width:250px;
-    transition:transform 0.3s ease, box-shadow 0.3s ease, border-color 0.3s ease;
-}
-.hp-fac-card:hover { transform:translateY(-6px); box-shadow:0 16px 34px rgba(23,22,91,0.1); border-color:rgba(23,22,91,0.2); }
-.hp-fac-avatar { width:74px; height:74px; border-radius:50%; margin:0 auto 12px; overflow:hidden; background:linear-gradient(135deg,var(--primary-color),#0D1048); display:flex; align-items:center; justify-content:center; color:#fff; font-size:26px; }
-.hp-fac-avatar img { width:100%; height:100%; object-fit:cover; }
-.hp-fac-card h4 { font-size:14px; font-weight:800; color:var(--text-dark); margin:0 0 4px; }
-.hp-fac-desig { font-size:11.5px; color:var(--primary-color); font-weight:600; }
-</style>
-<section class="hp-faculty">
-    <div class="container">
-        <div class="hp-sh">
-            <div class="hp-sh-badge"><i class="fas fa-chalkboard-teacher" style="font-size:9px;"></i> Our Faculty</div>
-            <h2>Meet Our <span>Faculty</span></h2>
-        </div>
-        <div class="hp-fac-grid">
-            <?php foreach ($home_faculty as $f): ?>
-            <div class="hp-fac-card">
-                <div class="hp-fac-avatar">
-                    <?php if (!empty($f['photo'])): ?>
-                        <img src="<?php echo htmlspecialchars($f['photo']); ?>" alt="<?php echo htmlspecialchars($f['name']); ?>" loading="lazy">
-                    <?php else: ?>
-                        <i class="fas <?php echo htmlspecialchars($f['icon'] ?: 'fa-chalkboard-teacher'); ?>"></i>
-                    <?php endif; ?>
-                </div>
-                <h4><?php echo htmlspecialchars($f['name']); ?></h4>
-                <div class="hp-fac-desig"><?php echo htmlspecialchars($f['designation']); ?></div>
-            </div>
-            <?php endforeach; ?>
-        </div>
-        <div class="hp-more-link"><a href="faculty.php" class="hp-btn"><i class="fas fa-arrow-right"></i> Meet All Faculty</a></div>
-    </div>
-</section>
-<?php endif; ?>
-
-<!-- ===== OUR INSTITUTE EXPLORE GRID ===== -->
-<style>
-.hp-institute { padding:70px 0; background:#F5F9FC; }
-.hp-inst-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:16px; }
-@media (max-width:1000px) { .hp-inst-grid { grid-template-columns:repeat(3,1fr); } }
-@media (max-width:600px) { .hp-inst-grid { grid-template-columns:1fr 1fr; } }
-.hp-inst-card {
-    background:#fff; border-radius:16px; border:1px solid rgba(23,22,91,0.1);
-    padding:26px 18px; text-align:center; text-decoration:none;
-    transition:transform 0.3s ease, box-shadow 0.3s ease;
-}
-.hp-inst-card:hover { transform:translateY(-4px); box-shadow:0 14px 34px rgba(23,22,91,0.1); }
-.hp-inst-icon { width:50px; height:50px; border-radius:12px; margin:0 auto 14px; background:rgba(23,22,91,0.08); display:flex; align-items:center; justify-content:center; color:var(--primary-color); font-size:20px; }
-.hp-inst-card h4 { font-size:13.5px; font-weight:800; color:var(--text-dark); margin:0 0 6px; }
-.hp-inst-card p { font-size:11.5px; color:var(--text-light); line-height:1.6; margin:0; }
-</style>
-<section class="hp-institute">
-    <div class="container">
-        <div class="hp-sh">
-            <div class="hp-sh-badge"><i class="fas fa-building-columns" style="font-size:9px;"></i> Our Institute</div>
-            <h2>Explore Our <span>Institute</span></h2>
-            <p>Our verified clinical training network, partnerships, projects and affiliations.</p>
-        </div>
-        <div class="hp-inst-grid">
-            <a href="clinical-training.php" class="hp-inst-card">
-                <div class="hp-inst-icon"><i class="fas fa-hospital"></i></div>
-                <h4>Clinical Training</h4>
-                <p>Our hospital partner network</p>
-            </a>
-            <a href="our-networks.php" class="hp-inst-card">
-                <div class="hp-inst-icon"><i class="fas fa-diagram-project"></i></div>
-                <h4>Our Networks</h4>
-                <p>Academic &amp; industry partners</p>
-            </a>
-            <a href="our-projects.php" class="hp-inst-card">
-                <div class="hp-inst-icon"><i class="fas fa-lightbulb"></i></div>
-                <h4>Our Projects</h4>
-                <p>Ongoing &amp; completed initiatives</p>
-            </a>
-            <a href="accreditation.php" class="hp-inst-card">
-                <div class="hp-inst-icon"><i class="fas fa-certificate"></i></div>
-                <h4>Affiliations &amp; Accreditation</h4>
-                <p>Our verified standing</p>
-            </a>
-            <a href="foundation.php" class="hp-inst-card">
-                <div class="hp-inst-icon"><i class="fas fa-hand-holding-heart"></i></div>
-                <h4>Welfare Foundation</h4>
-                <p>Our affiliated charity</p>
-            </a>
-        </div>
-    </div>
-</section>
-
-<!-- ===== SCHOLARSHIPS & MERIT FORMULA TEASER ===== -->
-<?php
-$home_scholarship_count = 0;
-$hsr = mysqli_query($conn, "SELECT COUNT(*) AS c FROM scholarships WHERE status='active'");
-if ($hsr) { $home_scholarship_count = (int) mysqli_fetch_assoc($hsr)['c']; }
-$home_merit_tiers = getMeritScholarshipTiers();
-?>
-<style>
-.hp-sch { padding:70px 0; background:#fff; }
-.hp-merit-strip { display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-bottom:28px; }
-.hp-merit-pill {
-    display:flex; flex-direction:column; align-items:center; gap:2px;
-    background:#F5F9FC; border:1px solid rgba(23,22,91,0.1); border-radius:14px;
-    padding:14px 20px; min-width:110px;
-}
-.hp-merit-pill .pct { font-size:20px; font-weight:800; color:var(--primary-color); }
-.hp-merit-pill .rng { font-size:11px; color:var(--text-light); text-align:center; }
-.hp-sch-note { text-align:center; color:var(--text-light); font-size:13px; margin:0 0 30px; }
-</style>
-<section class="hp-sch">
-    <div class="container">
-        <div class="hp-sh">
-            <div class="hp-sh-badge"><i class="fas fa-award" style="font-size:9px;"></i> Scholarships</div>
-            <h2>Merit Scholarship <span>Formula</span></h2>
-            <p>The same percentage tiers apply across University, Diploma and F.Sc programs.</p>
-        </div>
-        <div class="hp-merit-strip">
-            <?php foreach ($home_merit_tiers as $tier): ?>
-            <div class="hp-merit-pill"><span class="pct"><?php echo (int) $tier['pct']; ?>%</span><span class="rng"><?php echo htmlspecialchars($tier['range']); ?></span></div>
-            <?php endforeach; ?>
-        </div>
-        <?php if ($home_scholarship_count > 0): ?>
-        <p class="hp-sch-note">Plus Merit, Need-Based and Other verified scholarship categories are available.</p>
-        <?php endif; ?>
-        <div class="hp-more-link"><a href="scholarships.php" class="hp-btn"><i class="fas fa-arrow-right"></i> View Scholarships</a></div>
-    </div>
-</section>
-
-<!-- ===== ACTIVITIES TEASER ===== -->
-<?php
-$home_activities = [];
-$har = mysqli_query($conn, "SELECT title, category, event_date, image FROM events WHERE status='active' ORDER BY event_date DESC LIMIT 3");
-if ($har) { while ($row = mysqli_fetch_assoc($har)) { $home_activities[] = $row; } }
-?>
-<?php if (!empty($home_activities)): ?>
-<style>
-.hp-act { padding:70px 0; background:#F5F9FC; }
-.hp-act-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
-@media (max-width:900px) { .hp-act-grid { grid-template-columns:1fr; } }
-.hp-act-card { background:#fff; border-radius:14px; border:1px solid rgba(23,22,91,0.1); padding:20px 22px; }
-.hp-act-card h4 { font-size:14.5px; font-weight:800; color:var(--text-dark); margin:0 0 6px; }
-.hp-act-date { font-size:11.5px; color:var(--text-light); }
-</style>
-<section class="hp-act">
-    <div class="container">
-        <div class="hp-sh">
-            <div class="hp-sh-badge"><i class="fas fa-star" style="font-size:9px;"></i> Student Life</div>
-            <h2>Recent <span>Activities</span></h2>
-        </div>
-        <div class="hp-act-grid">
-            <?php foreach ($home_activities as $a): ?>
-            <div class="hp-act-card">
-                <h4><?php echo htmlspecialchars($a['title']); ?></h4>
-                <div class="hp-act-date"><i class="fas fa-calendar-days"></i> <?php echo date('d M Y', strtotime($a['event_date'])); ?></div>
-            </div>
-            <?php endforeach; ?>
-        </div>
-        <div class="hp-more-link"><a href="activities.php" class="hp-btn"><i class="fas fa-arrow-right"></i> View All Activities</a></div>
-    </div>
-</section>
-<?php endif; ?>
-
 <!-- ===== CTA SECTION ===== -->
 <style>
 .cta-section {
@@ -1594,5 +1640,47 @@ if ($har) { while ($row = mysqli_fetch_assoc($har)) { $home_activities[] = $row;
     ob.observe(cs);
 })();
 </script>
+
+<!-- ===== CONTACT INFORMATION ===== -->
+<?php
+$hc_phone = getSitePhone(); $hc_email = getSiteEmail(); $hc_address = getSiteAddress(); $hc_hours = getOfficeHours();
+$hc_map = 'https://www.google.com/maps/search/?api=1&query=' . rawurlencode(getSiteName() . ', ' . $hc_address);
+?>
+<style>
+.hp-contact { padding:64px 0; background:#fff; }
+.hp-contact-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; }
+@media (max-width:900px) { .hp-contact-grid { grid-template-columns:1fr 1fr; } }
+@media (max-width:520px) { .hp-contact-grid { grid-template-columns:1fr; } }
+.hp-contact-card { display:flex; gap:12px; align-items:flex-start; padding:18px; border:1px solid rgba(23,22,91,0.1); border-radius:14px; background:#F5F9FC; text-decoration:none; transition:border-color 0.25s ease, transform 0.25s ease; }
+a.hp-contact-card:hover { border-color:var(--primary-color); transform:translateY(-3px); }
+.hp-contact-card > i { width:42px; height:42px; border-radius:12px; background:var(--primary-color); color:#fff; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.hp-contact-card small { display:block; font-size:10.5px; font-weight:700; letter-spacing:0.8px; text-transform:uppercase; color:var(--text-light); margin-bottom:3px; }
+.hp-contact-card span { font-size:13.5px; font-weight:600; color:var(--text-dark); line-height:1.5; overflow-wrap:anywhere; }
+</style>
+<section class="hp-contact" id="contact-info">
+    <div class="container">
+        <div class="hp-sh">
+            <div class="hp-sh-badge"><i class="fas fa-headset" style="font-size:9px;"></i> Get in Touch</div>
+            <h2>Contact <span>Information</span></h2>
+            <p>Questions about programs, fees or admissions? Reach our admission office.</p>
+        </div>
+        <div class="hp-contact-grid">
+            <?php if ($hc_phone): ?><a class="hp-contact-card" href="tel:<?php echo htmlspecialchars(preg_replace('/[^0-9+]/', '', $hc_phone)); ?>"><i class="fas fa-phone"></i><div><small>Phone</small><span><?php echo htmlspecialchars($hc_phone); ?></span></div></a><?php endif; ?>
+            <?php if ($hc_email): ?><a class="hp-contact-card" href="mailto:<?php echo htmlspecialchars($hc_email); ?>"><i class="fas fa-envelope"></i><div><small>Email</small><span><?php echo htmlspecialchars($hc_email); ?></span></div></a><?php endif; ?>
+            <?php if ($hc_address): ?><a class="hp-contact-card" href="<?php echo htmlspecialchars($hc_map); ?>" target="_blank" rel="noopener"><i class="fas fa-location-dot"></i><div><small>Address</small><span><?php echo htmlspecialchars($hc_address); ?></span></div></a><?php endif; ?>
+            <?php if ($hc_hours): ?><div class="hp-contact-card"><i class="fas fa-clock"></i><div><small>Office Hours</small><span><?php echo htmlspecialchars($hc_hours); ?></span></div></div><?php endif; ?>
+        </div>
+        <div class="hp-more-link"><a href="contact.php" class="hp-btn"><i class="fas fa-paper-plane"></i> Send Us a Message</a></div>
+    </div>
+</section>
+
+<!-- Homepage section backgrounds alternate in the order above -->
+<style>
+.hp-programs { background:#fff; }
+.wcu-section { background:#F5F9FC; }
+.hp-institute { background:#fff; }
+.hp-sch { background:#F5F9FC; }
+.hp-sch .hp-merit-pill { background:#fff; }
+</style>
 
 <?php include 'includes/footer.php'; ?>

@@ -13,6 +13,7 @@ if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== tru
 }
 
 require_once __DIR__ . '/includes/csrf.php';
+require_once '../includes/setup_checklist.php';
 csrf_guard();
 
 // Fetch comprehensive statistics
@@ -424,6 +425,63 @@ $recent_contacts = mysqli_query($conn, "SELECT * FROM contacts ORDER BY created_
                 </a>
             </div>
         </div>
+
+        <!-- Website setup checklist (database updates + content gaps) -->
+        <?php $setup = getSetupChecklist($conn); $warns = array_filter($setup['items'], function ($i) { return $i[0] === 'warn'; }); $todos = array_filter($setup['items'], function ($i) { return $i[0] === 'todo'; }); ?>
+        <?php if ($setup['pending'] || $setup['items']): ?>
+        <div class="setup-card">
+            <div class="setup-head">
+                <h2><i class="fas fa-list-check"></i> Website Setup Checklist</h2>
+                <span><?php echo count($setup['pending']) ? '<b class="setup-db-pending">Database update needed</b>' : '<b class="setup-db-ok"><i class="fas fa-circle-check"></i> Database up to date</b>'; ?></span>
+            </div>
+            <?php if ($setup['pending']): ?>
+            <div class="setup-db">
+                <i class="fas fa-database"></i>
+                <div>
+                    <strong>Run <code>cpanel_sync_migration_2026_10.sql</code> in phpMyAdmin</strong> to enable: <?php echo htmlspecialchars(implode(', ', $setup['pending'])); ?>.
+                    <small>It only adds missing columns/tables, never changes existing records, and is safe to run more than once. Until then those features stay switched off and the site keeps working.</small>
+                </div>
+            </div>
+            <?php endif; ?>
+            <?php if ($warns): ?>
+            <ul class="setup-list">
+                <?php foreach ($warns as $it): ?>
+                <li class="setup-warn"><i class="fas fa-triangle-exclamation"></i><span><?php echo htmlspecialchars($it[1]); ?></span><a href="<?php echo htmlspecialchars($it[2]); ?>">Fix <i class="fas fa-arrow-right"></i></a></li>
+                <?php endforeach; ?>
+            </ul>
+            <?php endif; ?>
+            <?php if ($todos): ?>
+            <details class="setup-todos" <?php echo $warns || $setup['pending'] ? '' : 'open'; ?>>
+                <summary><?php echo count($todos); ?> section<?php echo count($todos) === 1 ? '' : 's'; ?> still need content</summary>
+                <ul class="setup-list">
+                    <?php foreach ($todos as $it): ?>
+                    <li class="setup-todo"><i class="far fa-circle"></i><span><?php echo htmlspecialchars($it[1]); ?></span><a href="<?php echo htmlspecialchars($it[2]); ?>">Add <i class="fas fa-arrow-right"></i></a></li>
+                    <?php endforeach; ?>
+                </ul>
+            </details>
+            <?php endif; ?>
+        </div>
+        <style>
+            .setup-card { background:#fff; border-radius:14px; padding:20px 22px; margin-bottom:24px; box-shadow:0 2px 12px rgba(0,0,0,0.05); border:1px solid rgba(23,22,91,0.08); }
+            .setup-head { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+            .setup-head h2 { margin:0; font-size:17px; color:var(--primary-color); display:flex; align-items:center; gap:9px; }
+            .setup-db-pending { color:#B45309; background:#fff8e1; padding:4px 12px; border-radius:50px; font-size:12px; }
+            .setup-db-ok { color:#15803D; background:#F0FDF4; padding:4px 12px; border-radius:50px; font-size:12px; }
+            .setup-db { display:flex; gap:12px; background:#fff8e1; border-left:4px solid #f59e0b; border-radius:8px; padding:12px 14px; font-size:13px; margin-bottom:12px; line-height:1.55; }
+            .setup-db > i { color:#B45309; margin-top:3px; }
+            .setup-db small { display:block; color:#7a5b00; margin-top:3px; }
+            .setup-list { list-style:none; margin:0; padding:0; }
+            .setup-list li { display:flex; align-items:flex-start; gap:10px; padding:9px 0; border-bottom:1px solid rgba(23,22,91,0.06); font-size:13px; line-height:1.5; }
+            .setup-list li:last-child { border-bottom:none; }
+            .setup-list li span { flex:1; color:var(--text-dark); }
+            .setup-list li a { white-space:nowrap; font-weight:700; font-size:12.5px; color:var(--primary-color); text-decoration:none; }
+            .setup-warn > i { color:#DC2626; margin-top:3px; }
+            .setup-todo > i { color:var(--text-light); margin-top:3px; }
+            .setup-todos summary { cursor:pointer; font-size:13px; font-weight:700; color:var(--text-dark); padding:8px 0 4px; }
+        </style>
+        <?php else: ?>
+        <div class="setup-card" style="background:#F0FDF4;border-color:rgba(22,163,74,0.25);padding:14px 20px;margin-bottom:24px;border-radius:14px;color:#15803D;font-weight:600;font-size:13.5px;"><i class="fas fa-circle-check"></i> Website setup complete — database up to date and every section has content.</div>
+        <?php endif; ?>
 
         <!-- Statistics Cards -->
         <div class="stats-grid">

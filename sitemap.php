@@ -38,6 +38,22 @@ $pages = [
     ['url' => 'contact.php', 'priority' => '0.7', 'changefreq' => 'yearly'],
 ];
 
+// Individual project detail pages (only those with a details write-up)
+$sm_projects = mysqli_query($conn, "SELECT id FROM projects WHERE visibility='active' AND details IS NOT NULL AND TRIM(details) <> '' ORDER BY display_order ASC");
+if ($sm_projects) {
+    while ($row = mysqli_fetch_assoc($sm_projects)) {
+        $pages[] = ['url' => 'project.php?id=' . (int)$row['id'], 'priority' => '0.6', 'changefreq' => 'monthly'];
+    }
+}
+
+// Individual program detail pages
+$sm_courses = mysqli_query($conn, "SELECT id FROM courses WHERE status='active' ORDER BY display_order ASC");
+if ($sm_courses) {
+    while ($row = mysqli_fetch_assoc($sm_courses)) {
+        $pages[] = ['url' => 'course.php?id=' . (int)$row['id'], 'priority' => '0.8', 'changefreq' => 'monthly'];
+    }
+}
+
 $base = rtrim(SITE_URL, '/');
 echo '<?xml version="1.0" encoding="UTF-8"?>' . "\n";
 ?>

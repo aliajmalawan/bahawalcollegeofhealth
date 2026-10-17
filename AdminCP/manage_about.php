@@ -45,7 +45,7 @@ if (isset($_POST['save_about'])) {
     if (isset($_FILES['about_hero_image']) && $_FILES['about_hero_image']['error'] == 0) {
         $upload_dir = '../images/';
         $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (in_array($_FILES['about_hero_image']['type'], $allowed_types) && $_FILES['about_hero_image']['size'] <= 10 * 1024 * 1024) {
+        if (adminImageUploadOk($_FILES['about_hero_image'], 10 * 1024 * 1024)) {
             $extension = pathinfo($_FILES['about_hero_image']['name'], PATHINFO_EXTENSION);
             $filename = 'about_hero_' . time() . '_' . rand(1000, 9999) . '.' . $extension;
             if (move_uploaded_file($_FILES['about_hero_image']['tmp_name'], $upload_dir . $filename)) {
@@ -70,7 +70,7 @@ if (isset($_POST['save_about'])) {
     if (isset($_FILES['about_image']) && $_FILES['about_image']['error'] == 0) {
         $upload_dir = '../images/';
         $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (in_array($_FILES['about_image']['type'], $allowed_types) && $_FILES['about_image']['size'] <= 10 * 1024 * 1024) {
+        if (adminImageUploadOk($_FILES['about_image'], 10 * 1024 * 1024)) {
             $extension = pathinfo($_FILES['about_image']['name'], PATHINFO_EXTENSION);
             $filename = 'about_' . time() . '_' . rand(1000, 9999) . '.' . $extension;
             if (move_uploaded_file($_FILES['about_image']['tmp_name'], $upload_dir . $filename)) {

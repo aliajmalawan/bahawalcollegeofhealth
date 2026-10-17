@@ -326,6 +326,8 @@
 }
 
 /* Message text */
+.lm-read-more { margin-left:auto; font-size:13px; font-weight:700; color:var(--primary-color); text-decoration:none; display:inline-flex; align-items:center; gap:6px; white-space:nowrap; }
+.lm-read-more:hover { gap:9px; color:var(--primary-color); }
 .lm-message-text {
     font-size: 15px;
     line-height: 1.9;
@@ -450,6 +452,9 @@
         <div class="lm-cards">
             <?php
             $leaders = getLeadershipMessages();
+            // Leaders that have a dedicated message page get a "Read full message" link
+            $msg_pages = [];
+            foreach (['chairman', 'principal'] as $mr) { $ml = getMessageLeader($mr); if ($ml) $msg_pages[(int) $ml['id']] = $mr . '-message.php'; }
             if (!empty($leaders)):
                 $count = 0;
                 foreach ($leaders as $leader):
@@ -511,6 +516,9 @@
                             <strong class="lm-footer-name"><?php echo htmlspecialchars($leader['name']); ?></strong>
                             <span class="lm-footer-role"><?php echo htmlspecialchars($leader['designation']); ?></span>
                         </div>
+                        <?php if (isset($msg_pages[(int) $leader['id']]) && basename($_SERVER['SCRIPT_NAME'] ?? '') === 'index.php'): ?>
+                        <a href="<?php echo $msg_pages[(int) $leader['id']]; ?>" class="lm-read-more">Read full message <i class="fas fa-arrow-right"></i></a>
+                        <?php endif; ?>
                     </div>
                 </div>
             </div>

@@ -1,0 +1,5 @@
+# This folder (and every subfolder) only ever holds images uploaded through
+# AdminCP, never scripts — deny script execution even if one were uploaded.
+<FilesMatch "\.(php|phtml|php3|php4|php5|php7|phar|pl|py|cgi|asp|aspx|sh)$">
+    Require all denied
+</FilesMatch>

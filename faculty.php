@@ -3,7 +3,7 @@ require_once 'includes/config.php';
 $page_title = 'Our Faculty';
 $page_description = 'Meet the expert faculty of Bahawal College of Health Sciences — qualified, experienced educators dedicated to student success.';
 
-$faculty_result = mysqli_query($conn, "SELECT * FROM faculty WHERE status='active' ORDER BY display_order ASC");
+$faculty_result = mysqli_query($conn, "SELECT * FROM faculty WHERE status='active' ORDER BY display_order ASC, name ASC");
 $db_faculty = [];
 if ($faculty_result && mysqli_num_rows($faculty_result) > 0)
     while ($r = mysqli_fetch_assoc($faculty_result)) $db_faculty[] = $r;
@@ -266,6 +266,39 @@ $card_themes = [
     .fac-grid     { grid-template-columns:1fr 1fr; gap:14px; }
     .fac-why-grid { grid-template-columns:1fr; }
 }
+
+/* --- Specialization, bio, search, profile dialog --- */
+.fac-spec { font-size:12px; color:var(--text-dark); margin-top:6px; line-height:1.5; }
+.fac-spec i { color:var(--primary-color); font-size:10px; margin-right:4px; }
+.fac-bio { font-size:12.5px; color:var(--text-light); line-height:1.6; margin:8px 0 0; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical; overflow:hidden; }
+.fac-profile-btn { margin-top:10px; background:none; border:1px solid rgba(23,22,91,0.2); border-radius:8px; padding:7px 12px; font-family:inherit; font-size:12px; font-weight:700; color:var(--primary-color); cursor:pointer; display:inline-flex; align-items:center; gap:6px; }
+.fac-profile-btn:hover { background:rgba(23,22,91,0.05); border-color:var(--primary-color); }
+.fac-tools { display:flex; flex-direction:column; align-items:center; gap:14px; margin-bottom:32px; }
+.fac-tools .fac-filters { margin-bottom:0; }
+.fac-search { position:relative; width:min(420px,100%); }
+.fac-search input { width:100%; padding:11px 14px 11px 38px; border:1px solid #d7dde0; border-radius:50px; font-family:inherit; font-size:13.5px; background:#fff; }
+.fac-search input:focus { outline:none; border-color:var(--primary-color); box-shadow:0 0 0 3px rgba(23,22,91,0.1); }
+.fac-search i { position:absolute; left:14px; top:50%; transform:translateY(-50%); color:var(--text-light); font-size:13px; }
+.fac-noresults { display:none; text-align:center; color:var(--text-light); padding:30px 10px; font-size:14px; }
+.fac-dialog { margin:auto; border:none; border-radius:18px; padding:0; width:min(640px, calc(100vw - 32px)); max-height:calc(100vh - 40px); box-shadow:0 30px 80px rgba(0,0,0,0.35); }
+.fac-dialog::backdrop { background:rgba(13,16,72,0.6); }
+.fac-dlg-head { display:flex; gap:18px; align-items:center; padding:24px 24px 18px; background:linear-gradient(135deg,#0D1048,#17165B); color:#fff; }
+.fac-dlg-photo { width:96px; height:96px; border-radius:50%; object-fit:cover; border:3px solid rgba(255,255,255,0.35); flex-shrink:0; background:rgba(255,255,255,0.1); display:flex; align-items:center; justify-content:center; font-size:30px; font-weight:800; }
+.fac-dlg-head h3 { margin:0 0 4px; font-size:20px; font-weight:800; color:#fff; }
+.fac-dlg-head div div { font-size:13px; opacity:0.85; }
+.fac-dlg-body { padding:20px 24px 24px; }
+.fac-dlg-row { display:flex; gap:10px; padding:9px 0; border-bottom:1px solid rgba(23,22,91,0.07); font-size:13.5px; }
+.fac-dlg-row i { color:var(--primary-color); width:16px; text-align:center; margin-top:3px; }
+.fac-dlg-row strong { min-width:118px; color:var(--text-light); font-weight:600; }
+.fac-dlg-row span { color:var(--text-dark); font-weight:600; }
+.fac-dlg-bio { margin:16px 0 0; font-size:14px; line-height:1.8; color:var(--text-light); white-space:pre-line; }
+.fac-dlg-close { position:absolute; top:12px; right:12px; width:34px; height:34px; border-radius:50%; border:none; background:rgba(255,255,255,0.15); color:#fff; cursor:pointer; }
+.fac-dlg-close:hover { background:rgba(255,255,255,0.3); }
+@media (max-width:520px) {
+    .fac-dlg-head { flex-direction:column; text-align:center; }
+    .fac-dlg-row { flex-direction:column; gap:2px; }
+    .fac-dlg-row strong { min-width:0; }
+}
 </style>
 
 <!-- ── Hero ── -->
@@ -287,17 +320,26 @@ $card_themes = [
     </div>
 </section>
 
-<!-- ── Stats bar ── -->
+<!-- ── Stats bar (only real figures) ── -->
+<?php
+$stats_bar = [];
+if (count($faculty) > 0) $stats_bar[] = [count($faculty), count($faculty) === 1 ? 'Faculty Member' : 'Faculty Members'];
+$exp_vals = array_filter(array_map(function ($f) { return $f['experience'] !== null && (int) $f['experience'] > 0 ? (int) $f['experience'] : null; }, $faculty));
+if ($faculty_stats['stat2_number'] !== '') $stats_bar[] = [$faculty_stats['stat2_number'], $faculty_stats['stat2_label']];
+elseif ($exp_vals) $stats_bar[] = [round(array_sum($exp_vals) / count($exp_vals)) . ' yrs', 'Avg. Experience'];
+foreach (['stat3', 'stat4'] as $sk) { if ($faculty_stats[$sk . '_number'] !== '') $stats_bar[] = [$faculty_stats[$sk . '_number'], $faculty_stats[$sk . '_label']]; }
+?>
+<?php if ($stats_bar): ?>
 <div class="fac-stats-bar">
     <div class="container">
         <div class="fac-stats-inner">
-            <div class="fac-stat"><div class="fac-stat-n"><?php echo count($faculty); ?>+</div><div class="fac-stat-l">Expert Teachers</div></div>
-            <div class="fac-stat"><div class="fac-stat-n"><?php echo htmlspecialchars($faculty_stats['stat2_number']); ?></div><div class="fac-stat-l"><?php echo htmlspecialchars($faculty_stats['stat2_label']); ?></div></div>
-            <div class="fac-stat"><div class="fac-stat-n"><?php echo htmlspecialchars($faculty_stats['stat3_number']); ?></div><div class="fac-stat-l"><?php echo htmlspecialchars($faculty_stats['stat3_label']); ?></div></div>
-            <div class="fac-stat"><div class="fac-stat-n"><?php echo htmlspecialchars($faculty_stats['stat4_number']); ?></div><div class="fac-stat-l"><?php echo htmlspecialchars($faculty_stats['stat4_label']); ?></div></div>
+            <?php foreach ($stats_bar as $sb): ?>
+            <div class="fac-stat"><div class="fac-stat-n"><?php echo htmlspecialchars($sb[0]); ?></div><div class="fac-stat-l"><?php echo htmlspecialchars($sb[1]); ?></div></div>
+            <?php endforeach; ?>
         </div>
     </div>
 </div>
+<?php endif; ?>
 
 <!-- ── Faculty Grid ── -->
 <section class="fac-section">
@@ -316,6 +358,13 @@ $card_themes = [
         </div>
         <?php else: ?>
 
+        <?php $show_search = count($faculty) >= 6; ?>
+        <?php if ($show_department_filter || $show_search): ?>
+        <div class="fac-tools">
+        <?php if ($show_search): ?>
+        <label class="fac-search"><i class="fas fa-magnifying-glass"></i><input type="search" id="facSearch" placeholder="Search by name, designation or specialization" aria-label="Search faculty"></label>
+        <?php endif; ?>
+        <?php endif; ?>
         <?php if ($show_department_filter): ?>
         <div class="fac-filters" id="facFilters">
             <button type="button" class="fac-chip active" data-filter="all">All (<?php echo count($faculty); ?>)</button>
@@ -324,6 +373,7 @@ $card_themes = [
             <?php endforeach; ?>
         </div>
         <?php endif; ?>
+        <?php if ($show_department_filter || $show_search): ?></div><?php endif; ?>
 
         <div class="fac-grid" id="facGrid">
         <?php foreach($faculty as $idx => $t):
@@ -332,7 +382,8 @@ $card_themes = [
             $nameParts = preg_split('/\s+/', trim($t['name']));
             $initials  = mb_strtoupper(mb_substr($nameParts[0] ?? '', 0, 1) . (count($nameParts) > 1 ? mb_substr(end($nameParts), 0, 1) : ''));
         ?>
-            <div class="fac-card" data-fac-delay="<?php echo $delay; ?>" data-department="<?php echo htmlspecialchars($t['department'] ?? ''); ?>">
+            <div class="fac-card" data-fac-delay="<?php echo $delay; ?>" data-department="<?php echo htmlspecialchars($t['department'] ?? ''); ?>"
+                 data-search="<?php echo htmlspecialchars(mb_strtolower(implode(' ', [$t['name'], $t['designation'], $t['department'], $t['specialization'] ?? '', $t['qualification']]))); ?>">
 
                 <div class="fac-card-top">
                     <?php if(!empty($t['photo'])): ?>
@@ -359,6 +410,12 @@ $card_themes = [
                     <?php if(!empty($t['department'])): ?>
                     <div class="fac-dept"><?php echo htmlspecialchars($t['department']); ?></div>
                     <?php endif; ?>
+                    <?php if(!empty($t['specialization'])): ?>
+                    <div class="fac-spec"><i class="fas fa-stethoscope"></i><?php echo htmlspecialchars($t['specialization']); ?></div>
+                    <?php endif; ?>
+                    <?php if(!empty($t['bio'])): ?>
+                    <p class="fac-bio"><?php echo htmlspecialchars($t['bio']); ?></p>
+                    <?php endif; ?>
                 </div>
 
                 <div class="fac-card-foot">
@@ -371,17 +428,32 @@ $card_themes = [
                     <?php if(!empty($t['experience'])): ?>
                     <div class="fac-info-row">
                         <i class="fas fa-clock"></i>
-                        <strong><?php echo htmlspecialchars($t['experience']); ?> yrs</strong>
+                        <strong><?php echo (int) $t['experience']; ?> <?php echo (int) $t['experience'] === 1 ? 'yr' : 'yrs'; ?></strong>
                         <span>experience</span>
                     </div>
                     <?php endif; ?>
+                    <button type="button" class="fac-profile-btn"
+                        data-profile="<?php echo htmlspecialchars(json_encode([
+                            'name' => $t['name'], 'designation' => $t['designation'] ?: '', 'department' => $t['department'] ?: '',
+                            'qualification' => $t['qualification'] ?: '', 'specialization' => $t['specialization'] ?? '',
+                            'experience' => $t['experience'] !== null && (int) $t['experience'] > 0 ? (int) $t['experience'] : null,
+                            'bio' => $t['bio'] ?? '', 'photo' => $t['photo'] ?: '', 'initials' => $initials,
+                        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>">
+                        <i class="fas fa-id-badge"></i> View Profile
+                    </button>
                 </div>
             </div>
         <?php endforeach; ?>
         </div>
+        <p class="fac-noresults" id="facNoResults">No faculty members match your search.</p>
         <?php endif; ?>
     </div>
 </section>
+
+<dialog class="fac-dialog" id="facDialog" aria-labelledby="facDlgName">
+    <button type="button" class="fac-dlg-close" aria-label="Close" onclick="this.closest('dialog').close()"><i class="fas fa-xmark"></i></button>
+    <div id="facDlgContent"></div>
+</dialog>
 
 <!-- ── Why Our Faculty Stands Out ── -->
 <section class="fac-why">
@@ -482,21 +554,58 @@ $card_themes = [
 })();
 </script>
 
-<?php if ($show_department_filter): ?>
+<?php if (!empty($faculty)): // filter, search and the profile dialog all live in this script ?>
 <script>
 (function() {
     var chips = document.querySelectorAll('#facFilters .fac-chip');
     var cards = document.querySelectorAll('#facGrid .fac-card');
-    chips.forEach(function(chip) {
-        chip.addEventListener('click', function() {
-            chips.forEach(function(c) { c.classList.remove('active'); });
-            chip.classList.add('active');
-            var filter = chip.dataset.filter;
-            cards.forEach(function(card) {
-                card.style.display = (filter === 'all' || card.dataset.department === filter) ? '' : 'none';
-            });
+    var search = document.getElementById('facSearch');
+    var none = document.getElementById('facNoResults');
+    var dept = 'all';
+
+    function apply() {
+        var q = search ? search.value.trim().toLowerCase() : '';
+        var shown = 0;
+        cards.forEach(function(card) {
+            var on = (dept === 'all' || card.dataset.department === dept) && (!q || card.dataset.search.indexOf(q) !== -1);
+            card.style.display = on ? '' : 'none';
+            if (on) { shown++; card.classList.add('fac-in'); }
         });
+        if (none) none.style.display = shown ? 'none' : 'block';
+    }
+    function setDept(d, push) {
+        dept = d;
+        chips.forEach(function(c) { c.classList.toggle('active', c.dataset.filter === d); });
+        apply();
+        if (push && history.replaceState) {
+            var url = new URL(location.href);
+            if (d === 'all') url.searchParams.delete('department'); else url.searchParams.set('department', d);
+            history.replaceState(null, '', url.pathname + url.search + url.hash);
+        }
+    }
+    chips.forEach(function(chip) { chip.addEventListener('click', function() { setDept(chip.dataset.filter, true); }); });
+    if (search) search.addEventListener('input', apply);
+    // Shareable link: faculty.php?department=Pharmacy
+    var start = new URLSearchParams(location.search).get('department');
+    if (start) chips.forEach(function(c) { if (c.dataset.filter === start) setDept(start, false); });
+
+    // Profile dialog — content comes from data on the card; all values are escaped below
+    var dlg = document.getElementById('facDialog'), box = document.getElementById('facDlgContent');
+    function esc(s) { return String(s).replace(/[&<>"']/g, function(c) { return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+    document.addEventListener('click', function(e) {
+        var btn = e.target.closest('.fac-profile-btn');
+        if (!btn || !dlg) return;
+        var p = JSON.parse(btn.dataset.profile);
+        var rows = [['fa-building-columns', 'Department', p.department], ['fa-certificate', 'Qualifications', p.qualification],
+                    ['fa-stethoscope', 'Specialization', p.specialization], ['fa-clock', 'Experience', p.experience ? p.experience + (p.experience === 1 ? ' year' : ' years') : '']];
+        var h = '<div class="fac-dlg-head">' + (p.photo ? '<img class="fac-dlg-photo" src="' + esc(p.photo) + '" alt="">' : '<div class="fac-dlg-photo">' + esc(p.initials) + '</div>') +
+                '<div><h3 id="facDlgName">' + esc(p.name) + '</h3><div>' + esc(p.designation) + '</div></div></div><div class="fac-dlg-body">';
+        rows.forEach(function(r) { if (r[2]) h += '<div class="fac-dlg-row"><i class="fas ' + r[0] + '"></i><strong>' + r[1] + '</strong><span>' + esc(r[2]) + '</span></div>'; });
+        if (p.bio) h += '<p class="fac-dlg-bio">' + esc(p.bio) + '</p>';
+        box.innerHTML = h + '</div>';
+        dlg.showModal ? dlg.showModal() : dlg.setAttribute('open', '');
     });
+    if (dlg) dlg.addEventListener('click', function(e) { if (e.target === dlg) dlg.close(); });
 })();
 </script>
 <?php endif; ?>

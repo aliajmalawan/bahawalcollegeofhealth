@@ -72,3 +72,17 @@ function compressUploadedImage($filePath, $maxWidth = 1920, $maxHeight = 1920, $
     imagedestroy($src);
     return $ok;
 }
+
+/**
+ * True when an uploaded file is a genuine image with an image extension.
+ * Use instead of checking $_FILES[...]['type'] — that value is sent by the
+ * browser and can be forged, so on its own it would let e.g. "shell.php"
+ * through as long as the request claims "image/jpeg".
+ */
+function adminImageUploadOk(array $file, $maxBytes) {
+    if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK || $file['size'] > $maxBytes) return false;
+    $ext = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+    if (!in_array($ext, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) return false;
+    $info = @getimagesize($file['tmp_name']);
+    return $info !== false && in_array($info['mime'], ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true);
+}

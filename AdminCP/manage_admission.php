@@ -5,6 +5,7 @@ session_start([
     'cookie_secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
 ]);
 require_once '../includes/config.php';
+require_once '../includes/admission_helper.php';
 
 if (!isset($_SESSION['admin_logged_in']) || $_SESSION['admin_logged_in'] !== true) {
     header('Location: login.php');
@@ -67,6 +68,13 @@ if (isset($_POST['save_steps'])) {
         saveAdmSetting($conn, "adm_step{$i}_desc", $_POST["adm_step{$i}_desc"] ?? '');
     }
     redirectBackAdmission('page_content', 'Admission process steps saved successfully!');
+}
+
+if (isset($_POST['save_sessions'])) {
+    $lines = array_values(array_filter(array_map('trim', preg_split('/\R/', (string) ($_POST['adm_sessions'] ?? '')))));
+    if (!$lines) redirectBackAdmission('page_content', 'Add at least one admission session.', true);
+    saveAdmSetting($conn, 'adm_sessions', implode("\n", $lines));
+    redirectBackAdmission('page_content', 'Admission sessions saved successfully!');
 }
 
 if (isset($_POST['save_documents'])) {
@@ -161,7 +169,8 @@ $applications_result = mysqli_query($conn, "SELECT a.*, c.name as course_name FR
 $view_app = null;
 if (isset($_GET['view_app'])) {
     $view_id = intval($_GET['view_app']);
-    $view_app = mysqli_fetch_assoc(mysqli_query($conn, "SELECT a.*, c.name as course_name FROM admissions a LEFT JOIN courses c ON a.course_id = c.id WHERE a.id = $view_id"));
+    $view_app = mysqli_fetch_assoc(mysqli_query($conn, "SELECT a.*, c.name as course_name, c.department as course_department FROM admissions a LEFT JOIN courses c ON a.course_id = c.id WHERE a.id = $view_id"));
+    $view_files = $view_app ? getApplicationFiles($conn, $view_app['id']) : [];
 }
 
 $adm_steps = getAdmissionSteps();
@@ -270,17 +279,22 @@ $tab_labels = [
                     <h3 style="color: var(--primary-color); font-size: 16px; margin-bottom: 14px;">Student Details</h3>
                     <p style="margin-bottom: 8px;"><strong>Full Name:</strong> <?php echo htmlspecialchars($view_app['student_name']); ?></p>
                     <p style="margin-bottom: 8px;"><strong>Father's Name:</strong> <?php echo htmlspecialchars($view_app['father_name']); ?></p>
+                    <?php if (!empty($view_app['gender'])): ?><p style="margin-bottom: 8px;"><strong>Gender:</strong> <?php echo ucfirst(htmlspecialchars($view_app['gender'])); ?></p><?php endif; ?>
+                    <?php if (!empty($view_app['date_of_birth'])): ?><p style="margin-bottom: 8px;"><strong>Date of Birth:</strong> <?php echo date('d M Y', strtotime($view_app['date_of_birth'])); ?> (age <?php echo (new DateTime($view_app['date_of_birth']))->diff(new DateTime('today'))->y; ?>)</p><?php endif; ?>
                     <p style="margin-bottom: 8px;"><strong>CNIC / B-Form:</strong> <?php echo htmlspecialchars($view_app['cnic_bform']); ?></p>
                     <p style="margin-bottom: 8px;"><strong>Qualification:</strong> <?php echo htmlspecialchars($view_app['qualification'] ?: ($view_app['previous_education'] ?: '—')); ?></p>
                     <?php if (!empty($view_app['board_university'])): ?><p style="margin-bottom: 8px;"><strong>Board / University:</strong> <?php echo htmlspecialchars($view_app['board_university']); ?></p><?php endif; ?>
                     <?php if (!empty($view_app['passing_year'])): ?><p style="margin-bottom: 8px;"><strong>Passing Year:</strong> <?php echo htmlspecialchars($view_app['passing_year']); ?></p><?php endif; ?>
-                    <p style="margin: 0;"><strong>Marks / Percentage:</strong> <?php echo $view_app['marks_percentage'] !== null ? rtrim(rtrim(number_format($view_app['marks_percentage'], 2), '0'), '.') . '%' : '—'; ?></p>
+                    <p style="margin: 0;"><strong>Marks / Percentage:</strong> <?php echo $view_app['marks_percentage'] !== null ? rtrim(rtrim(number_format($view_app['marks_percentage'], 2), '0'), '.') . '%' : (!empty($view_app['result_awaited']) ? '<span style="color:#B45309;font-weight:700;">Result awaited</span>' : '—'); ?></p>
                 </div>
 
                 <div class="card" style="margin-bottom: 20px;">
                     <h3 style="color: var(--primary-color); font-size: 16px; margin-bottom: 14px;">Course & Contact</h3>
                     <p style="margin-bottom: 8px;"><strong>Applying For:</strong> <?php echo htmlspecialchars($view_app['course_name'] ?? $view_app['course_id']); ?> (<?php echo htmlspecialchars($view_app['medium'] ?: 'English'); ?> medium)</p>
+                    <?php if (!empty($view_app['course_department'])): ?><p style="margin-bottom: 8px;"><strong>Department:</strong> <?php echo htmlspecialchars($view_app['course_department']); ?></p><?php endif; ?>
+                    <?php if (!empty($view_app['admission_session'])): ?><p style="margin-bottom: 8px;"><strong>Admission Session:</strong> <?php echo htmlspecialchars($view_app['admission_session']); ?></p><?php endif; ?>
                     <p style="margin-bottom: 8px;"><strong>Phone:</strong> <a href="tel:<?php echo htmlspecialchars($view_app['phone']); ?>"><?php echo htmlspecialchars($view_app['phone']); ?></a></p>
+                    <?php if (!empty($view_app['guardian_phone'])): ?><p style="margin-bottom: 8px;"><strong>Guardian Phone:</strong> <a href="tel:<?php echo htmlspecialchars($view_app['guardian_phone']); ?>"><?php echo htmlspecialchars($view_app['guardian_phone']); ?></a></p><?php endif; ?>
                     <?php if (!empty($view_app['email'])): ?><p style="margin-bottom: 8px;"><strong>Email:</strong> <a href="mailto:<?php echo htmlspecialchars($view_app['email']); ?>"><?php echo htmlspecialchars($view_app['email']); ?></a></p><?php endif; ?>
                     <p style="margin: 0;"><strong>Address:</strong> <?php echo htmlspecialchars($view_app['address']); ?></p>
                 </div>
@@ -292,10 +306,28 @@ $tab_labels = [
                 </div>
                 <?php endif; ?>
 
-                <?php if (!empty($view_app['documents'])): ?>
+                <?php if (!empty($view_files) || !empty($view_app['documents'])): ?>
                 <div class="card" style="margin-bottom: 20px;">
-                    <h3 style="color: var(--primary-color); font-size: 16px; margin-bottom: 14px;">Uploaded Document</h3>
-                    <a href="../<?php echo htmlspecialchars($view_app['documents']); ?>" target="_blank" class="btn btn-primary"><i class="fas fa-file-alt"></i> View / Download</a>
+                    <h3 style="color: var(--primary-color); font-size: 16px; margin-bottom: 14px;">Uploaded Documents</h3>
+                    <?php if (!empty($view_files['photo'][0])): ?>
+                    <img src="admission_file.php?id=<?php echo (int) $view_files['photo'][0]['id']; ?>" alt="Applicant photograph" style="width:110px;height:130px;object-fit:cover;border-radius:8px;border:1px solid var(--border-color);margin-bottom:12px;display:block;">
+                    <?php endif; ?>
+                    <?php foreach (getAdmissionDocTypes() as $dt => $slot): if (empty($view_files[$dt])) continue; ?>
+                    <div style="margin-bottom:10px;">
+                        <strong style="font-size:13px;"><?php echo htmlspecialchars($slot['label']); ?></strong>
+                        <?php foreach ($view_files[$dt] as $doc): ?>
+                        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border-color);font-size:13px;">
+                            <i class="fas <?php echo $doc['mime_type'] === 'application/pdf' ? 'fa-file-pdf' : 'fa-file-image'; ?>" style="color:var(--primary-color);"></i>
+                            <span style="flex:1;overflow-wrap:anywhere;"><?php echo htmlspecialchars($doc['original_name'] ?: basename($doc['file_path'])); ?> <small style="color:var(--text-light);">(<?php echo round(((int) $doc['file_size']) / 1024); ?> KB)</small></span>
+                            <a href="admission_file.php?id=<?php echo (int) $doc['id']; ?>" target="_blank" rel="noopener">View</a>
+                            <a href="admission_file.php?id=<?php echo (int) $doc['id']; ?>&download=1">Download</a>
+                        </div>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endforeach; ?>
+                    <?php if (!empty($view_app['documents'])): ?>
+                    <a href="admission_file.php?legacy=<?php echo (int) $view_app['id']; ?>" target="_blank" rel="noopener" class="btn btn-primary"><i class="fas fa-file-alt"></i> View Uploaded Document</a>
+                    <?php endif; ?>
                 </div>
                 <?php endif; ?>
 
@@ -362,7 +394,7 @@ $tab_labels = [
                                 <strong><?php echo htmlspecialchars($app['student_name']); ?></strong>
                                 <br><span style="font-size:12px;color:var(--text-light);">Father: <?php echo htmlspecialchars($app['father_name']); ?></span>
                             </td>
-                            <td><?php echo htmlspecialchars($app['course_name'] ?? $app['course_id']); ?></td>
+                            <td><?php echo htmlspecialchars($app['course_name'] ?? $app['course_id']); ?><?php if (!empty($app['admission_session'])): ?><br><span style="font-size:12px;color:var(--text-light);">Session <?php echo htmlspecialchars($app['admission_session']); ?></span><?php endif; ?></td>
                             <td><?php echo htmlspecialchars($app['phone']); ?></td>
                             <td><?php echo date('M d, Y', strtotime($app['created_at'])); ?></td>
                             <td><span class="status-badge status-<?php echo $app['status']; ?>"><?php echo ucfirst($app['status']); ?></span></td>
@@ -403,6 +435,22 @@ $tab_labels = [
                     <?php endfor; ?>
                 </div>
                 <button type="submit" name="save_steps" class="btn btn-primary"><i class="fas fa-save"></i> Save Steps</button>
+            </div>
+        </form>
+
+        <form method="POST"><?php echo csrf_field(); ?>
+            <div class="card" style="margin-bottom: 25px;">
+                <h2 style="color: var(--primary-color); margin-bottom: 20px;"><i class="fas fa-calendar-alt"></i> Admission Sessions</h2>
+                <?php if (!admissionFormV2Ready($conn)): ?>
+                <div style="background:#fff8e1;border-left:4px solid #f59e0b;border-radius:8px;padding:10px 14px;font-size:12.5px;margin-bottom:14px;">
+                    <i class="fas fa-triangle-exclamation"></i> Run <strong>add_admission_form_fields.sql</strong> in phpMyAdmin to enable the session, date of birth, gender and multi-document fields on the online form.
+                </div>
+                <?php endif; ?>
+                <div class="form-group">
+                    <label for="adm_sessions_input">Sessions applicants can choose — one per line (e.g. 2026-2027 or Fall 2026)</label>
+                    <textarea id="adm_sessions_input" name="adm_sessions" rows="3"><?php echo htmlspecialchars(implode("\n", getAdmissionSessions())); ?></textarea>
+                </div>
+                <button type="submit" name="save_sessions" class="btn btn-primary"><i class="fas fa-save"></i> Save Sessions</button>
             </div>
         </form>
 

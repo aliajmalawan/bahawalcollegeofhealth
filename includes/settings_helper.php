@@ -8,6 +8,22 @@
 $_settings_cache = null;
 
 /**
+ * True when $table has column $column — lets pages keep working before an
+ * optional "ADD COLUMN" migration .sql file has been run in phpMyAdmin.
+ */
+function dbColumnExists($conn, $table, $column) {
+    static $cache = [];
+    $key = $table . '.' . $column;
+    if (!isset($cache[$key])) {
+        $t = preg_replace('/[^A-Za-z0-9_]/', '', $table);
+        $c = mysqli_real_escape_string($conn, $column);
+        $r = mysqli_query($conn, "SHOW COLUMNS FROM `$t` LIKE '$c'");
+        $cache[$key] = $r && mysqli_num_rows($r) > 0;
+    }
+    return $cache[$key];
+}
+
+/**
  * Load all settings from database into cache
  */
 function loadSettings() {
@@ -141,6 +157,31 @@ function getFooterContent() {
 /**
  * Get leadership messages
  */
+/**
+ * The leadership entry shown on chairman-message.php / principal-message.php.
+ * Matched by Designation or Role Title (AdminCP > Home Page > Leadership);
+ * "Vice Principal" / "Vice Chairman" never count. $role is 'chairman' or 'principal'.
+ */
+function getMessageLeader($role) {
+    global $conn;
+    $role = $role === 'chairman' ? 'chairman' : 'principal';
+    $r = mysqli_query($conn, "SELECT * FROM leadership
+        WHERE status = 'active'
+          AND (LOWER(designation) LIKE '%$role%' OR LOWER(role_title) LIKE '%$role%')
+          AND LOWER(designation) NOT LIKE '%vice%' AND LOWER(COALESCE(role_title, '')) NOT LIKE '%vice%'
+        ORDER BY display_order ASC, id ASC LIMIT 1");
+    return $r ? mysqli_fetch_assoc($r) : null;
+}
+
+/** Editable placeholder shown while no Chairman / Principal message is published. */
+function getMessagePlaceholder($role) {
+    $label = $role === 'chairman' ? 'Chairman' : 'Principal';
+    return [
+        'title' => getSetting('msg_' . $role . '_placeholder_title', $label . "'s Message — Coming Soon"),
+        'text'  => getSetting('msg_' . $role . '_placeholder_text', 'The ' . $label . "'s message will be published here soon."),
+    ];
+}
+
 function getLeadershipMessages() {
     global $conn;
 
@@ -579,11 +620,13 @@ function getFacultyHero() {
  */
 function getFacultyStats() {
     return [
-        'stat2_number' => getSetting('faculty_stat2_number', '10+'),
+        // Numbers default to blank: a stat is shown only when an admin enters a real figure
+        // (stat 2 falls back to the average experience calculated from faculty profiles)
+        'stat2_number' => getSetting('faculty_stat2_number', ''),
         'stat2_label' => getSetting('faculty_stat2_label', 'Avg. Experience (yrs)'),
-        'stat3_number' => getSetting('faculty_stat3_number', '98%'),
+        'stat3_number' => getSetting('faculty_stat3_number', ''),
         'stat3_label' => getSetting('faculty_stat3_label', 'Student Pass Rate'),
-        'stat4_number' => getSetting('faculty_stat4_number', '100%'),
+        'stat4_number' => getSetting('faculty_stat4_number', ''),
         'stat4_label' => getSetting('faculty_stat4_label', 'Board-Qualified')
     ];
 }

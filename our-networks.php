@@ -1,16 +1,25 @@
 <?php
 require_once 'includes/config.php';
 $page_title = 'Our Networks';
-$page_description = 'See the hospitals and institutional partners in the Bahawal College of Health Sciences professional network.';
+$page_description = 'Partner hospitals, clinical training sites, academic partners, affiliated institutions and professional partners of Bahawal College of Health Sciences.';
 
 // Partner Hospitals & Clinical Training Network — reuses the same verified
 // data already managed under Clinical Training (no duplicate admin entry).
-$hospitals = [];
+// Only hospitals an admin has marked "Verified partnership" are presented as partners;
+// the rest are listed neutrally as clinical training sites.
+$partner_hospitals = [];
+$training_sites = [];
 $hr = mysqli_query($conn, "SELECT * FROM clinical_partners WHERE status='active' ORDER BY display_order ASC, id ASC");
 if ($hr) {
     while ($row = mysqli_fetch_assoc($hr)) {
-        $hospitals[] = $row;
+        if (!empty($row['is_verified'])) $partner_hospitals[] = $row; else $training_sites[] = $row;
     }
+}
+
+// Admin-entered website links are shown only when they're real http(s) URLs
+function onwUrl($url) {
+    $url = trim((string) $url);
+    return preg_match('#^https?://[^\s]+$#i', $url) ? $url : '';
 }
 
 // Academic Partners / Affiliated Institutions / Industry & Professional Partners
@@ -27,7 +36,7 @@ if ($nr) {
 $section_meta = [
     'academic'              => ['badge' => 'Academic Network',  'title' => 'Academic <span>Partners</span>',              'sub' => 'Universities and academic bodies we work with on curriculum, examinations, or degree affiliation.', 'icon' => 'fa-building-columns', 'empty' => 'We\'re finalizing our verified academic partnerships. This section will list them here as they\'re confirmed.'],
     'affiliated_institution' => ['badge' => 'Affiliations',      'title' => 'Affiliated <span>Institutions</span>',        'sub' => 'Boards, councils and institutions we are formally affiliated or registered with.', 'icon' => 'fa-landmark', 'empty' => 'We\'re finalizing our verified institutional affiliations. This section will list them here as they\'re confirmed.'],
-    'industry_professional' => ['badge' => 'Industry Network',   'title' => 'Industry &amp; <span>Professional Partners</span>', 'sub' => 'Organizations and professional bodies connected to student placement, internships or professional development.', 'icon' => 'fa-handshake', 'empty' => 'We\'re finalizing our verified industry and professional partnerships. This section will list them here as they\'re confirmed.'],
+    'industry_professional' => ['badge' => 'Professional Network', 'title' => 'Industry &amp; <span>Professional Partners</span>', 'sub' => 'Organizations and professional bodies connected to student placement, internships or professional development.', 'icon' => 'fa-handshake', 'empty' => 'We\'re finalizing our verified industry and professional partnerships. This section will list them here as they\'re confirmed.'],
 ];
 ?>
 <?php include 'includes/header.php'; ?>
@@ -152,6 +161,27 @@ $section_meta = [
 .onw-alt .onw-empty { background:#F5F9FC; }
 .onw-empty i { font-size:38px; color:var(--border-color); margin-bottom:14px; display:block; }
 .onw-empty p { color:var(--text-light); font-size:13px; margin:0 auto; max-width:420px; }
+
+/* --- Jump nav + verified badge --- */
+.onw-nav { background:#fff; border-bottom:1px solid rgba(23,22,91,0.08); padding:14px 0; position:sticky; top:0; z-index:40; box-shadow:0 2px 12px rgba(0,0,0,0.04); }
+.onw-nav-inner { display:flex; gap:8px; flex-wrap:wrap; justify-content:center; }
+.onw-nav a {
+    display:inline-flex; align-items:center; gap:7px; padding:7px 15px; border-radius:50px;
+    border:1px solid rgba(23,22,91,0.18); color:var(--text-dark); font-size:12.5px; font-weight:600; text-decoration:none;
+    transition:all 0.25s ease;
+}
+.onw-nav a:hover { border-color:var(--primary-color); color:var(--primary-color); background:rgba(23,22,91,0.04); }
+.onw-nav a span { background:rgba(23,22,91,0.08); color:var(--primary-color); border-radius:50px; padding:0 7px; font-size:11px; font-weight:700; }
+.onw-section { scroll-margin-top:70px; }
+.onw-verified { display:inline-flex; align-items:center; gap:5px; margin-top:6px; padding:2px 10px; border-radius:50px; background:rgba(22,163,74,0.1); color:#15803D; font-size:10.5px; font-weight:700; letter-spacing:0.4px; text-transform:uppercase; }
+.onw-hcard-progs { display:flex; flex-wrap:wrap; gap:5px; margin-top:7px; }
+.onw-hcard-progs span { font-size:10.5px; font-weight:600; color:#078FB8; background:rgba(9,169,217,0.08); border:1px solid rgba(9,169,217,0.22); padding:1px 8px; border-radius:5px; }
+.onw-page-empty { text-align:center; padding:70px 30px; background:#fff; border-radius:18px; border:1px solid rgba(23,22,91,0.1); max-width:640px; margin:0 auto; }
+.onw-page-empty i { font-size:46px; color:var(--border-color); display:block; margin-bottom:14px; }
+.onw-page-empty h3 { font-size:19px; color:var(--text-dark); margin:0 0 8px; }
+.onw-page-empty p { font-size:13.5px; color:var(--text-light); margin:0; line-height:1.7; }
+.onw-note { text-align:center; font-size:12px; color:var(--text-light); max-width:640px; margin:26px auto 0; line-height:1.7; }
+@media (max-width:600px) { .onw-nav { position:static; } }
 </style>
 
 <!-- HERO -->
@@ -163,25 +193,66 @@ $section_meta = [
             <span>Our Networks</span>
         </div>
         <div class="onw-hero-badge">
-            <i class="fas fa-diagram-project"></i> Verified Partnerships
+            <i class="fas fa-diagram-project"></i> Our Network
         </div>
         <h1>Our <span>Networks</span></h1>
-        <p>Bahawal College of Health Sciences works with a verified network of hospitals, academic bodies, affiliated institutions and industry partners to support quality clinical training, education and career development.</p>
+        <p>The hospitals, academic bodies, affiliated institutions and professional organizations that support clinical training, education and career development at Bahawal College of Health Sciences.</p>
     </div>
 </section>
 
-<!-- PARTNER HOSPITALS / CLINICAL TRAINING -->
+<?php
+// Sections in display order; empty ones are hidden so the page never shows a row of "coming soon" boxes
+$sections = [
+    'partner-hospitals' => ['label' => 'Partner Hospitals', 'icon' => 'fa-hospital', 'count' => count($partner_hospitals)],
+    'training-sites'    => ['label' => 'Clinical Training Sites', 'icon' => 'fa-stethoscope', 'count' => count($training_sites)],
+    'academic'               => ['label' => 'Academic Partners', 'icon' => $section_meta['academic']['icon'], 'count' => count($network['academic'])],
+    'affiliated_institution' => ['label' => 'Affiliated Institutions', 'icon' => $section_meta['affiliated_institution']['icon'], 'count' => count($network['affiliated_institution'])],
+    'industry_professional'  => ['label' => 'Professional Partners', 'icon' => $section_meta['industry_professional']['icon'], 'count' => count($network['industry_professional'])],
+];
+$visible = array_filter($sections, function ($x) { return $x['count'] > 0; });
+?>
+
+<?php if (!$visible): ?>
 <section class="onw-section">
     <div class="container">
-        <div class="onw-sh">
-            <div class="onw-sh-badge"><i class="fas fa-hospital" style="font-size:9px;"></i> Partner Hospitals</div>
-            <h2>Clinical Training <span>Network</span></h2>
-            <p>Hospitals and clinical facilities where our students gain hands-on, supervised training.</p>
+        <div class="onw-page-empty">
+            <i class="fas fa-diagram-project"></i>
+            <h3>Our Network — Coming Soon</h3>
+            <p>We're finalizing details of our partner hospitals, academic partners, affiliated institutions and professional partners. They will be listed here once confirmed.</p>
         </div>
+    </div>
+</section>
+<?php else: ?>
 
-        <?php if (count($hospitals) > 0): ?>
+<?php if (count($visible) > 1): ?>
+<nav class="onw-nav" aria-label="Network sections">
+    <div class="container onw-nav-inner">
+        <?php foreach ($visible as $key => $sec): ?>
+        <a href="#<?php echo $key; ?>"><i class="fas <?php echo $sec['icon']; ?>"></i> <?php echo $sec['label']; ?> <span><?php echo $sec['count']; ?></span></a>
+        <?php endforeach; ?>
+    </div>
+</nav>
+<?php endif; ?>
+
+<?php
+$alt = true;
+// Hospital groups share one card layout
+$hospital_groups = [
+    'partner-hospitals' => ['items' => $partner_hospitals, 'badge' => 'Verified Partners', 'title' => 'Partner <span>Hospitals</span>', 'sub' => 'Hospitals with a partnership confirmed by the college, where our students receive supervised clinical training.', 'verified' => true],
+    'training-sites'    => ['items' => $training_sites, 'badge' => 'Clinical Training', 'title' => 'Clinical Training <span>Sites</span>', 'sub' => 'Other hospitals and clinical facilities where our students gain hands-on, supervised training experience.', 'verified' => false],
+];
+foreach ($hospital_groups as $key => $g): if (!$g['items']) continue; $alt = !$alt; ?>
+<section class="onw-section <?php echo $alt ? 'onw-alt' : ''; ?>" id="<?php echo $key; ?>">
+    <div class="container">
+        <div class="onw-sh">
+            <div class="onw-sh-badge"><i class="fas <?php echo $sections[$key]['icon']; ?>" style="font-size:9px;"></i> <?php echo $g['badge']; ?></div>
+            <h2><?php echo $g['title']; ?></h2>
+            <p><?php echo $g['sub']; ?></p>
+        </div>
         <div class="onw-hgrid">
-            <?php foreach ($hospitals as $h): ?>
+            <?php foreach ($g['items'] as $h):
+                $progs = array_slice(array_values(array_filter(array_map('trim', preg_split('/\R/', (string) $h['programs'])))), 0, 4);
+            ?>
             <div class="onw-hcard">
                 <div class="onw-hcard-logo">
                     <?php if (!empty($h['logo'])): ?>
@@ -195,27 +266,24 @@ $section_meta = [
                     <?php if (!empty($h['location'])): ?>
                     <div class="onw-loc"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars($h['location']); ?></div>
                     <?php endif; ?>
+                    <?php if ($g['verified']): ?><span class="onw-verified"><i class="fas fa-circle-check"></i> Verified Partner</span><?php endif; ?>
+                    <?php if ($progs): ?>
+                    <div class="onw-hcard-progs"><?php foreach ($progs as $pg): ?><span><?php echo htmlspecialchars($pg); ?></span><?php endforeach; ?></div>
+                    <?php endif; ?>
                 </div>
             </div>
             <?php endforeach; ?>
         </div>
         <div class="onw-more-link">
-            <a href="clinical-training.php">View Full Clinical Training Details <i class="fas fa-arrow-right"></i></a>
+            <a href="clinical-training.php">View facilities &amp; training details <i class="fas fa-arrow-right"></i></a>
         </div>
-        <?php else: ?>
-        <div class="onw-hgrid">
-            <div class="onw-empty">
-                <i class="fas fa-hospital"></i>
-                <p>We're finalizing our verified hospital and clinical training partnerships. This section will list them here as they're confirmed.</p>
-            </div>
-        </div>
-        <?php endif; ?>
     </div>
 </section>
+<?php endforeach; ?>
 
-<!-- ACADEMIC / AFFILIATED / INDUSTRY SECTIONS -->
-<?php $alt = true; foreach ($network as $cat => $items): $meta = $section_meta[$cat]; $alt = !$alt; ?>
-<section class="onw-section <?php echo $alt ? 'onw-alt' : ''; ?>">
+<!-- ACADEMIC / AFFILIATED / PROFESSIONAL SECTIONS -->
+<?php foreach ($network as $cat => $items): if (!$items) continue; $meta = $section_meta[$cat]; $alt = !$alt; ?>
+<section class="onw-section <?php echo $alt ? 'onw-alt' : ''; ?>" id="<?php echo $cat; ?>">
     <div class="container">
         <div class="onw-sh">
             <div class="onw-sh-badge"><i class="fas <?php echo $meta['icon']; ?>" style="font-size:9px;"></i> <?php echo $meta['badge']; ?></div>
@@ -224,37 +292,36 @@ $section_meta = [
         </div>
 
         <div class="onw-grid">
-            <?php if (count($items) > 0): ?>
-                <?php foreach ($items as $p): ?>
-                <div class="onw-card">
-                    <div class="onw-card-logo">
-                        <?php if (!empty($p['logo'])): ?>
-                            <img src="<?php echo htmlspecialchars($p['logo']); ?>" alt="<?php echo htmlspecialchars($p['name']); ?>" loading="lazy">
-                        <?php else: ?>
-                            <i class="fas <?php echo $meta['icon']; ?>"></i>
-                        <?php endif; ?>
-                    </div>
-                    <h4><?php echo htmlspecialchars($p['name']); ?></h4>
-                    <?php if (!empty($p['location'])): ?>
-                    <div class="onw-loc"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars($p['location']); ?></div>
-                    <?php endif; ?>
-                    <?php if (!empty($p['description'])): ?>
-                    <p class="onw-desc"><?php echo htmlspecialchars($p['description']); ?></p>
-                    <?php endif; ?>
-                    <?php if (!empty($p['website'])): ?>
-                    <a href="<?php echo htmlspecialchars($p['website']); ?>" target="_blank" rel="noopener" class="onw-website">Visit Website <i class="fas fa-arrow-up-right-from-square" style="font-size:9px;"></i></a>
+            <?php foreach ($items as $p): $site = onwUrl($p['website']); ?>
+            <div class="onw-card">
+                <div class="onw-card-logo">
+                    <?php if (!empty($p['logo'])): ?>
+                        <img src="<?php echo htmlspecialchars($p['logo']); ?>" alt="<?php echo htmlspecialchars($p['name']); ?>" loading="lazy">
+                    <?php else: ?>
+                        <i class="fas <?php echo $meta['icon']; ?>"></i>
                     <?php endif; ?>
                 </div>
-                <?php endforeach; ?>
-            <?php else: ?>
-                <div class="onw-empty">
-                    <i class="fas <?php echo $meta['icon']; ?>"></i>
-                    <p><?php echo $meta['empty']; ?></p>
-                </div>
-            <?php endif; ?>
+                <h4><?php echo htmlspecialchars($p['name']); ?></h4>
+                <?php if (!empty($p['location'])): ?>
+                <div class="onw-loc"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars($p['location']); ?></div>
+                <?php endif; ?>
+                <?php if (!empty($p['description'])): ?>
+                <p class="onw-desc"><?php echo nl2br(htmlspecialchars($p['description'])); ?></p>
+                <?php endif; ?>
+                <?php if ($site): ?>
+                <a href="<?php echo htmlspecialchars($site); ?>" target="_blank" rel="noopener" class="onw-website">Visit Website <i class="fas fa-arrow-up-right-from-square" style="font-size:9px;"></i></a>
+                <?php endif; ?>
+            </div>
+            <?php endforeach; ?>
         </div>
     </div>
 </section>
 <?php endforeach; ?>
+
+<?php if (count($visible) < count($sections)): ?>
+<div class="container"><p class="onw-note"><i class="fas fa-circle-info"></i> More partners will be listed here as partnerships are confirmed.</p></div>
+<?php endif; ?>
+
+<?php endif; ?>
 
 <?php include 'includes/footer.php'; ?>

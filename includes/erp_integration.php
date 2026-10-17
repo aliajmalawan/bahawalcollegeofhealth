@@ -89,7 +89,7 @@ function erpSendPayload($endpointPath, array $payload) {
  */
 function pushAdmissionToErp($conn, $admission_id) {
     $admission_id = intval($admission_id);
-    $row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT a.*, c.name AS course_name FROM admissions a LEFT JOIN courses c ON c.id = a.course_id WHERE a.id = $admission_id"));
+    $row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT a.*, c.name AS course_name, c.department AS department FROM admissions a LEFT JOIN courses c ON c.id = a.course_id WHERE a.id = $admission_id"));
     if (!$row) return;
 
     $result = erpSendPayload('applicants', [
@@ -102,6 +102,16 @@ function pushAdmissionToErp($conn, $admission_id) {
         'course_name'        => $row['course_name'],
         'qualification'      => $row['qualification'],
         'marks_percentage'   => $row['marks_percentage'],
+        'board_university'   => $row['board_university'],
+        'passing_year'       => $row['passing_year'],
+        'address'            => $row['address'],
+        // Present once add_admission_form_fields.sql has been run
+        'gender'             => $row['gender'] ?? null,
+        'date_of_birth'      => $row['date_of_birth'] ?? null,
+        'guardian_phone'     => $row['guardian_phone'] ?? null,
+        'admission_session'  => $row['admission_session'] ?? null,
+        'result_awaited'     => isset($row['result_awaited']) ? (bool) $row['result_awaited'] : null,
+        'department'         => $row['department'],
         'status'             => $row['status'],
     ]);
 

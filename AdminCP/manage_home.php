@@ -15,6 +15,21 @@ require_once __DIR__ . '/includes/csrf.php';
 csrf_guard();
 
 $valid_tabs = ['hero', 'notifications', 'general', 'dms', 'leadership', 'wcu', 'cta'];
+
+// Placeholder text for the Chairman / Principal message pages (shown until a leader is published)
+if (isset($_POST['save_message_placeholders'])) {
+    foreach (['chairman', 'principal'] as $mr) {
+        foreach (['title', 'text'] as $part) {
+            $k = mysqli_real_escape_string($conn, "msg_{$mr}_placeholder_{$part}");
+            $v = mysqli_real_escape_string($conn, trim($_POST["msg_{$mr}_placeholder_{$part}"] ?? ''));
+            $ex = mysqli_query($conn, "SELECT id FROM settings WHERE setting_key = '$k'");
+            if ($ex && mysqli_num_rows($ex) > 0) mysqli_query($conn, "UPDATE settings SET setting_value = '$v' WHERE setting_key = '$k'");
+            else mysqli_query($conn, "INSERT INTO settings (setting_key, setting_value) VALUES ('$k', '$v')");
+        }
+    }
+    header('Location: manage_home.php?tab=leadership&msg=' . urlencode('Message page placeholders saved!'));
+    exit;
+}
 $active_tab = isset($_GET['tab']) && in_array($_GET['tab'], $valid_tabs) ? $_GET['tab'] : 'hero';
 $message = isset($_GET['msg']) ? $_GET['msg'] : '';
 $is_error = isset($_GET['err']) && $_GET['err'] == '1';
@@ -52,7 +67,7 @@ if (isset($_POST['add_slide'])) {
         if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
 
         $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (in_array($_FILES['slide_image']['type'], $allowed_types) && $_FILES['slide_image']['size'] <= 10 * 1024 * 1024) {
+        if (adminImageUploadOk($_FILES['slide_image'], 10 * 1024 * 1024)) {
             $extension = pathinfo($_FILES['slide_image']['name'], PATHINFO_EXTENSION);
             $filename = 'slide_' . time() . '_' . rand(1000, 9999) . '.' . $extension;
             if (move_uploaded_file($_FILES['slide_image']['tmp_name'], $upload_dir . $filename)) {
@@ -90,7 +105,7 @@ if (isset($_POST['edit_slide'])) {
         if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
 
         $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (in_array($_FILES['slide_image']['type'], $allowed_types) && $_FILES['slide_image']['size'] <= 10 * 1024 * 1024) {
+        if (adminImageUploadOk($_FILES['slide_image'], 10 * 1024 * 1024)) {
             $extension = pathinfo($_FILES['slide_image']['name'], PATHINFO_EXTENSION);
             $filename = 'slide_' . time() . '_' . rand(1000, 9999) . '.' . $extension;
             if (move_uploaded_file($_FILES['slide_image']['tmp_name'], $upload_dir . $filename)) {
@@ -267,7 +282,7 @@ if (isset($_POST['add_leader']) || isset($_POST['edit_leader'])) {
         $upload_dir = '../images/leadership/';
         if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
         $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (in_array($_FILES['photo']['type'], $allowed_types) && $_FILES['photo']['size'] <= 5 * 1024 * 1024) {
+        if (adminImageUploadOk($_FILES['photo'], 5 * 1024 * 1024)) {
             $extension = pathinfo($_FILES['photo']['name'], PATHINFO_EXTENSION);
             $filename = 'leader_' . time() . '_' . rand(1000, 9999) . '.' . $extension;
             if (move_uploaded_file($_FILES['photo']['tmp_name'], $upload_dir . $filename)) {
@@ -282,7 +297,7 @@ if (isset($_POST['add_leader']) || isset($_POST['edit_leader'])) {
         $upload_dir = '../images/signatures/';
         if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
         $allowed_types = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (in_array($_FILES['signature']['type'], $allowed_types) && $_FILES['signature']['size'] <= 2 * 1024 * 1024) {
+        if (adminImageUploadOk($_FILES['signature'], 2 * 1024 * 1024)) {
             $extension = pathinfo($_FILES['signature']['name'], PATHINFO_EXTENSION);
             $filename = 'signature_' . time() . '_' . rand(1000, 9999) . '.' . $extension;
             if (move_uploaded_file($_FILES['signature']['tmp_name'], $upload_dir . $filename)) {
@@ -404,6 +419,9 @@ $hero = getHeroContent();
 $stats = getStatistics();
 $dms_features_result = mysqli_query($conn, "SELECT * FROM dms_features ORDER BY display_order ASC, id ASC");
 $leaders_result = mysqli_query($conn, "SELECT * FROM leadership ORDER BY display_order ASC, id ASC");
+// Which entries feed the dedicated message pages (same lookup the public pages use)
+$msg_chairman = getMessageLeader('chairman');
+$msg_principal = getMessageLeader('principal');
 $wcu_items_result = mysqli_query($conn, "SELECT * FROM why_choose_us ORDER BY display_order ASC, id ASC");
 $wcu_stats = getWcuStats();
 $stats_header = getStatsHeader();
@@ -929,6 +947,30 @@ $tab_labels = [
             </form>
         </div>
 
+        <div class="card" style="margin-bottom:20px;">
+            <h2 style="color:var(--primary-color);margin-bottom:12px;"><i class="fas fa-quote-left"></i> Chairman &amp; Principal Message Pages</h2>
+            <p style="color:var(--text-light);font-size:13px;margin:0 0 14px;">The <a href="../chairman-message.php" target="_blank">Chairman's Message</a> and <a href="../principal-message.php" target="_blank">Principal's Message</a> pages automatically show the active leader below whose <strong>Designation</strong> (or Role Title) contains "Chairman" / "Principal". Photo, name, designation, message and signature are edited in the list below.</p>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+                <?php foreach (['chairman' => $msg_chairman, 'principal' => $msg_principal] as $mr => $ml): ?>
+                <div style="padding:10px 14px;border-radius:8px;font-size:13px;<?php echo $ml ? 'background:#d4edda;color:#155724;' : 'background:#fff8e1;color:#7a5b00;'; ?>">
+                    <strong><?php echo ucfirst($mr); ?>'s page:</strong>
+                    <?php echo $ml ? 'showing ' . htmlspecialchars($ml['name']) : 'no active leader with "' . ucfirst($mr) . '" in the designation &mdash; the placeholder below is shown'; ?>
+                </div>
+                <?php endforeach; ?>
+            </div>
+            <form method="POST"><?php echo csrf_field(); ?>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                    <?php foreach (['chairman', 'principal'] as $mr): $ph = getMessagePlaceholder($mr); ?>
+                    <div>
+                        <div class="form-group"><label for="ph_<?php echo $mr; ?>_t"><?php echo ucfirst($mr); ?> placeholder heading</label><input id="ph_<?php echo $mr; ?>_t" type="text" name="msg_<?php echo $mr; ?>_placeholder_title" value="<?php echo htmlspecialchars($ph['title']); ?>"></div>
+                        <div class="form-group"><label for="ph_<?php echo $mr; ?>_m"><?php echo ucfirst($mr); ?> placeholder message</label><textarea id="ph_<?php echo $mr; ?>_m" name="msg_<?php echo $mr; ?>_placeholder_text" rows="2"><?php echo htmlspecialchars($ph['text']); ?></textarea></div>
+                    </div>
+                    <?php endforeach; ?>
+                </div>
+                <button type="submit" name="save_message_placeholders" class="btn btn-primary"><i class="fas fa-save"></i> Save Placeholders</button>
+            </form>
+        </div>
+
         <div class="card" style="margin-bottom: 20px; display:flex; justify-content:space-between; align-items:center;">
             <strong style="color: var(--primary-color);"><i class="fas fa-users"></i> Leadership Messages</strong>
             <button class="btn btn-primary" onclick="openAddLeaderModal()"><i class="fas fa-plus"></i> Add New Leader</button>
@@ -950,8 +992,8 @@ $tab_labels = [
                                 <?php endif; ?>
                             </td>
                             <td><strong><?php echo htmlspecialchars($leader['name']); ?></strong></td>
-                            <td><?php echo htmlspecialchars($leader['designation']); ?></td>
-                            <td><?php echo htmlspecialchars($leader['role_title']); ?></td>
+                            <td><?php echo htmlspecialchars($leader['designation']); ?><?php foreach (['chairman' => $msg_chairman, 'principal' => $msg_principal] as $mr => $ml): if ($ml && (int) $ml['id'] === (int) $leader['id']): ?><br><span style="display:inline-block;margin-top:4px;font-size:11px;font-weight:700;background:#e7f3ff;color:var(--primary-color);padding:2px 8px;border-radius:50px;"><i class="fas fa-link"></i> <?php echo ucfirst($mr); ?>'s Message page</span><?php endif; endforeach; ?></td>
+                            <td><?php echo htmlspecialchars($leader['role_title'] ?? ''); ?></td>
                             <td><span class="status-badge status-<?php echo $leader['status']; ?>"><?php echo ucfirst($leader['status']); ?></span></td>
                             <td>
                                 <button class="action-btn btn-edit" onclick='openEditLeaderModal(<?php echo json_encode($leader, JSON_HEX_APOS | JSON_HEX_QUOT); ?>)'><i class="fas fa-edit"></i></button>

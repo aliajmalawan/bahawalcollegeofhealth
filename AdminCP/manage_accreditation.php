@@ -54,6 +54,19 @@ if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id']))
     }
 }
 
+// Page text shown on the public page (intro + placeholder used while no records are published)
+if (isset($_POST['save_acc_text'])) {
+    foreach (['acc_intro_text', 'acc_placeholder_title', 'acc_placeholder_text'] as $k) {
+        $key = mysqli_real_escape_string($conn, $k);
+        $val = mysqli_real_escape_string($conn, trim($_POST[$k] ?? ''));
+        $ex = mysqli_query($conn, "SELECT id FROM settings WHERE setting_key = '$key'");
+        if ($ex && mysqli_num_rows($ex) > 0) mysqli_query($conn, "UPDATE settings SET setting_value = '$val' WHERE setting_key = '$key'");
+        else mysqli_query($conn, "INSERT INTO settings (setting_key, setting_value) VALUES ('$key', '$val')");
+    }
+    header('Location: manage_accreditation.php?msg=' . urlencode('Page text saved successfully!'));
+    exit;
+}
+
 // Handle add/edit
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $organization_name = mysqli_real_escape_string($conn, trim($_POST['organization_name'] ?? ''));
@@ -61,7 +74,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $program = mysqli_real_escape_string($conn, trim($_POST['program'] ?? ''));
     $status = array_key_exists($_POST['status'] ?? '', $statuses) ? $_POST['status'] : 'pending';
     $description = mysqli_real_escape_string($conn, trim($_POST['description'] ?? ''));
-    $website = mysqli_real_escape_string($conn, trim($_POST['website'] ?? ''));
+    $website_raw = trim($_POST['website'] ?? '');
+    if ($website_raw !== '' && !preg_match('#^https?://#i', $website_raw)) $website_raw = 'https://' . $website_raw;
+    if ($website_raw !== '' && !filter_var($website_raw, FILTER_VALIDATE_URL)) $website_raw = '';
+    $website = mysqli_real_escape_string($conn, $website_raw);
     $valid_from = trim($_POST['valid_from'] ?? '');
     $valid_until = trim($_POST['valid_until'] ?? '');
     $valid_from_sql = $valid_from !== '' ? "'" . mysqli_real_escape_string($conn, $valid_from) . "'" : 'NULL';
@@ -261,6 +277,27 @@ $show_form = $edit_record || $_SERVER['REQUEST_METHOD'] === 'POST';
             }
         </script>
 
+        <!-- Page text -->
+        <details class="card" style="margin-bottom:25px;" <?php echo isset($_GET['msg']) && strpos($_GET['msg'], 'Page text') === 0 ? 'open' : ''; ?>>
+            <summary style="cursor:pointer;font-weight:700;color:var(--primary-color);font-size:15px;"><i class="fas fa-pen-to-square"></i> Page Text &amp; Placeholder</summary>
+            <form method="POST" style="margin-top:16px;"><?php echo csrf_field(); ?>
+                <div class="form-group">
+                    <label for="acc_intro_text">Intro text (page banner)</label>
+                    <textarea id="acc_intro_text" name="acc_intro_text" rows="2"><?php echo htmlspecialchars(getSetting('acc_intro_text', 'Our affiliation and accreditation status with regulatory bodies, councils and academic institutions — shown transparently, including records still pending or under review.')); ?></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="acc_placeholder_title">Placeholder heading (shown while no records are published)</label>
+                    <input id="acc_placeholder_title" type="text" name="acc_placeholder_title" value="<?php echo htmlspecialchars(getSetting('acc_placeholder_title', 'Accreditation Records — To Be Published')); ?>">
+                </div>
+                <div class="form-group">
+                    <label for="acc_placeholder_text">Placeholder message</label>
+                    <textarea id="acc_placeholder_text" name="acc_placeholder_text" rows="3"><?php echo htmlspecialchars(getSetting('acc_placeholder_text', 'Details of our affiliations and accreditation will be published here once they have been confirmed by the college administration.')); ?></textarea>
+                    <small style="color:var(--text-light);">Program affiliations entered under Academics &gt; Courses are also shown on the page automatically.</small>
+                </div>
+                <button type="submit" name="save_acc_text" class="btn btn-primary"><i class="fas fa-save"></i> Save Page Text</button>
+            </form>
+        </details>
+
         <!-- List -->
         <div class="card" style="overflow-x:auto;">
             <table class="data-table">
@@ -277,7 +314,14 @@ $show_form = $edit_record || $_SERVER['REQUEST_METHOD'] === 'POST';
                             <td><?php echo htmlspecialchars($r['title'] ?: '—'); ?></td>
                             <td><?php echo htmlspecialchars($r['program'] ?: '—'); ?></td>
                             <td><span class="accred-status-pill" style="background:<?php echo $status_colors[$r['status']]; ?>1a;color:<?php echo $status_colors[$r['status']]; ?>;"><?php echo $statuses[$r['status']]; ?></span></td>
-                            <td><?php echo $r['valid_until'] ? date('d M Y', strtotime($r['valid_until'])) : '—'; ?></td>
+                            <td><?php
+                                if ($r['valid_until']) {
+                                    echo date('d M Y', strtotime($r['valid_until']));
+                                    $days = (int) floor((strtotime($r['valid_until']) - strtotime(date('Y-m-d'))) / 86400);
+                                    if ($days < 0 && in_array($r['status'], ['accredited', 'provisional'], true)) echo '<br><small style="color:#DC2626;font-weight:700;">Date passed &mdash; shown publicly as Expired</small>';
+                                    elseif ($days >= 0 && $days <= 90) echo '<br><small style="color:#B45309;font-weight:700;">Expires in ' . $days . ' day' . ($days === 1 ? '' : 's') . '</small>';
+                                } else { echo '&mdash;'; }
+                            ?></td>
                             <td><span class="status-pill" style="background: <?php echo $r['visibility'] == 'active' ? '#16A34A' : '#DC2626'; ?>;"><?php echo ucfirst($r['visibility']); ?></span></td>
                             <td>
                                 <a href="?edit=<?php echo $r['id']; ?>" class="action-btn btn-edit"><i class="fas fa-edit"></i></a>

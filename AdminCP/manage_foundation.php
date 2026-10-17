@@ -37,6 +37,9 @@ if (isset($_POST['save_foundation_content'])) {
     saveFoundationSetting($conn, 'foundation_purpose', trim($_POST['foundation_purpose'] ?? ''));
     saveFoundationSetting($conn, 'foundation_objectives_list', trim($_POST['foundation_objectives_list'] ?? ''));
     saveFoundationSetting($conn, 'foundation_relationship', trim($_POST['foundation_relationship'] ?? ''));
+    foreach (['foundation_contact_person', 'foundation_phone', 'foundation_email', 'foundation_address', 'foundation_website', 'foundation_gallery_category'] as $fk) {
+        saveFoundationSetting($conn, $fk, trim($_POST[$fk] ?? ''));
+    }
 
     if (isset($_FILES['foundation_logo']) && $_FILES['foundation_logo']['error'] == 0) {
         $upload_dir = '../uploads/foundation/';
@@ -67,6 +70,25 @@ if (isset($_POST['save_activity'])) {
     $display_order = intval($_POST['display_order'] ?? 0);
     $status = ($_POST['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
 
+    // Optional activity image (needs add_foundation_fields.sql)
+    $img_set = $img_col = $img_val = '';
+    if (dbColumnExists($conn, 'foundation_activities', 'image') && isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
+        $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+        if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp']) && @getimagesize($_FILES['image']['tmp_name'])) {
+            if (!file_exists('../uploads/foundation/')) mkdir('../uploads/foundation/', 0777, true);
+            $filename = 'activity_' . time() . '_' . uniqid() . '.' . $ext;
+            if (move_uploaded_file($_FILES['image']['tmp_name'], '../uploads/foundation/' . $filename)) {
+                compressUploadedImage('../uploads/foundation/' . $filename);
+                if (!empty($_POST['activity_id'])) {
+                    $old = mysqli_fetch_assoc(mysqli_query($conn, "SELECT image FROM foundation_activities WHERE id = " . intval($_POST['activity_id'])));
+                    if ($old && !empty($old['image']) && file_exists('../' . $old['image'])) unlink('../' . $old['image']);
+                }
+                $img = mysqli_real_escape_string($conn, 'uploads/foundation/' . $filename);
+                $img_set = ", image='$img'"; $img_col = ', image'; $img_val = ", '$img'";
+            }
+        }
+    }
+
     if ($title === '') {
         header('Location: manage_foundation.php?tab=activities&msg=' . urlencode('Activity title is required.') . '&err=1');
         exit;
@@ -74,10 +96,10 @@ if (isset($_POST['save_activity'])) {
 
     if (!empty($_POST['activity_id'])) {
         $id = intval($_POST['activity_id']);
-        $q = "UPDATE foundation_activities SET title='$title', description='$description', activity_date=$activity_date_sql, icon='$icon', display_order=$display_order, status='$status' WHERE id=$id";
+        $q = "UPDATE foundation_activities SET title='$title', description='$description', activity_date=$activity_date_sql, icon='$icon', display_order=$display_order, status='$status'$img_set WHERE id=$id";
         $ok = mysqli_query($conn, $q);
     } else {
-        $q = "INSERT INTO foundation_activities (title, description, activity_date, icon, display_order, status) VALUES ('$title', '$description', $activity_date_sql, '$icon', $display_order, '$status')";
+        $q = "INSERT INTO foundation_activities (title, description, activity_date, icon, display_order, status$img_col) VALUES ('$title', '$description', $activity_date_sql, '$icon', $display_order, '$status'$img_val)";
         $ok = mysqli_query($conn, $q);
     }
     header('Location: manage_foundation.php?tab=activities&msg=' . urlencode($ok ? 'Activity saved successfully!' : 'Error saving activity.') . ($ok ? '' : '&err=1'));
@@ -86,6 +108,8 @@ if (isset($_POST['save_activity'])) {
 
 if (isset($_GET['delete_activity_id'])) {
     $id = intval($_GET['delete_activity_id']);
+    $old = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM foundation_activities WHERE id = $id"));
+    if ($old && !empty($old['image']) && file_exists('../' . $old['image'])) unlink('../' . $old['image']);
     mysqli_query($conn, "DELETE FROM foundation_activities WHERE id = $id");
     header('Location: manage_foundation.php?tab=activities&msg=' . urlencode('Activity removed successfully!'));
     exit;
@@ -186,6 +210,25 @@ $show_activity_form = $edit_activity || (isset($_GET['tab']) && $_GET['tab'] ===
                         <div style="margin-top:10px;"><img src="../<?php echo htmlspecialchars($logo); ?>" style="height:70px;border-radius:8px;"></div>
                     <?php endif; ?>
                 </div>
+                <h4 style="color:var(--primary-color);font-size:14px;margin:22px 0 12px;padding-top:16px;border-top:1px solid var(--border-color);"><i class="fas fa-address-book"></i> Contact Information (optional — shown only when filled in)</h4>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                    <div class="form-group"><label for="fdn_person">Contact Person</label><input id="fdn_person" type="text" name="foundation_contact_person" value="<?php echo htmlspecialchars(getSetting('foundation_contact_person', '')); ?>"></div>
+                    <div class="form-group"><label for="fdn_phone">Phone</label><input id="fdn_phone" type="text" name="foundation_phone" value="<?php echo htmlspecialchars(getSetting('foundation_phone', '')); ?>"></div>
+                    <div class="form-group"><label for="fdn_email">Email</label><input id="fdn_email" type="email" name="foundation_email" value="<?php echo htmlspecialchars(getSetting('foundation_email', '')); ?>"></div>
+                    <div class="form-group"><label for="fdn_website">Website</label><input id="fdn_website" type="url" name="foundation_website" placeholder="https://..." value="<?php echo htmlspecialchars(getSetting('foundation_website', '')); ?>"></div>
+                </div>
+                <div class="form-group"><label for="fdn_address">Address</label><textarea id="fdn_address" name="foundation_address" rows="2"><?php echo htmlspecialchars(getSetting('foundation_address', '')); ?></textarea></div>
+
+                <h4 style="color:var(--primary-color);font-size:14px;margin:22px 0 12px;padding-top:16px;border-top:1px solid var(--border-color);"><i class="fas fa-images"></i> Photo Gallery</h4>
+                <div class="form-group">
+                    <label for="fdn_gallery_cat">Show images from this Gallery category</label>
+                    <select id="fdn_gallery_cat" name="foundation_gallery_category">
+                        <option value="">— No gallery —</option>
+                        <?php $gcr = mysqli_query($conn, "SELECT slug, name FROM gallery_categories WHERE status='active' ORDER BY display_order ASC, name ASC"); $cur = getSetting('foundation_gallery_category', '');
+                        if ($gcr) { while ($gc = mysqli_fetch_assoc($gcr)) { echo '<option value="' . htmlspecialchars($gc['slug']) . '"' . ($cur === $gc['slug'] ? ' selected' : '') . '>' . htmlspecialchars($gc['name']) . '</option>'; } } ?>
+                    </select>
+                    <small style="color:var(--text-light);">Upload Foundation photos under <a href="manage_gallery.php">Gallery</a> (create a category such as "Welfare Foundation"), then pick it here. Foundation projects are tagged under <a href="manage_projects.php">Our Projects</a>.</small>
+                </div>
                 <button type="submit" name="save_foundation_content" class="btn btn-primary"><i class="fas fa-save"></i> Save Content</button>
             </form>
         </div>
@@ -199,7 +242,7 @@ $show_activity_form = $edit_activity || (isset($_GET['tab']) && $_GET['tab'] ===
         <?php if ($show_activity_form): ?>
         <div class="card" style="margin-bottom: 25px;">
             <h2 style="color: var(--primary-color); margin-bottom: 20px;"><?php echo $edit_activity ? 'Edit Activity' : 'Add Activity'; ?></h2>
-            <form method="POST"><?php echo csrf_field(); ?>
+            <form method="POST" enctype="multipart/form-data"><?php echo csrf_field(); ?>
                 <?php if ($edit_activity): ?><input type="hidden" name="activity_id" value="<?php echo $edit_activity['id']; ?>"><?php endif; ?>
                 <div class="form-group">
                     <label for="auto_AdminCP_manage_foundation_php_8">Activity Title *</label>
@@ -223,6 +266,15 @@ $show_activity_form = $edit_activity || (isset($_GET['tab']) && $_GET['tab'] ===
                         <input id="auto_AdminCP_manage_foundation_php_12" type="number" name="display_order" value="<?php echo $edit_activity ? $edit_activity['display_order'] : 0; ?>" min="0">
                     </div>
                 </div>
+                <?php if (dbColumnExists($conn, 'foundation_activities', 'image')): ?>
+                <div class="form-group">
+                    <label for="fdn_activity_image">Image (optional — replaces the icon on the card)</label>
+                    <input id="fdn_activity_image" type="file" name="image" accept="image/*">
+                    <?php if ($edit_activity && !empty($edit_activity['image'])): ?><div style="margin-top:8px;"><img src="../<?php echo htmlspecialchars($edit_activity['image']); ?>" style="height:70px;border-radius:8px;"></div><?php endif; ?>
+                </div>
+                <?php else: ?>
+                <div style="background:#fff8e1;border-left:4px solid #f59e0b;border-radius:8px;padding:10px 14px;font-size:12.5px;margin-bottom:16px;"><i class="fas fa-triangle-exclamation"></i> Run <strong>add_foundation_fields.sql</strong> in phpMyAdmin to enable activity images and Foundation projects.</div>
+                <?php endif; ?>
                 <div class="form-group">
                     <label for="auto_AdminCP_manage_foundation_php_13">Status</label>
                     <select id="auto_AdminCP_manage_foundation_php_13" name="status">

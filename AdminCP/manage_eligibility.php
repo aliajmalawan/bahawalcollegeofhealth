@@ -16,6 +16,10 @@ csrf_guard();
 
 $message = '';
 
+// Optional columns — exist only after add_eligibility_rule_fields.sql has been run
+$elg_has_extra = dbColumnExists($conn, 'eligibility_rules', 'max_years_since_passing')
+              && dbColumnExists($conn, 'eligibility_rules', 'requirements');
+
 // Courses for the dropdown
 $courses = [];
 $cr = mysqli_query($conn, "SELECT id, name FROM courses WHERE status='active' ORDER BY display_order ASC, name ASC");
@@ -44,6 +48,16 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $display_order = intval($_POST['display_order'] ?? 0);
     $status = ($_POST['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
 
+    // Passing-year window and program-specific requirements (blank = not required)
+    $extra_set = $extra_cols = $extra_vals = '';
+    if ($elg_has_extra) {
+        $max_years = (($_POST['max_years_since_passing'] ?? '') !== '') ? max(0, intval($_POST['max_years_since_passing'])) : 'NULL';
+        $requirements = mysqli_real_escape_string($conn, trim($_POST['requirements'] ?? ''));
+        $extra_set  = ", max_years_since_passing=$max_years, requirements='$requirements'";
+        $extra_cols = ', max_years_since_passing, requirements';
+        $extra_vals = ", $max_years, '$requirements'";
+    }
+
     if (!array_key_exists($course_id, $courses)) {
         $message = "Please select a valid program.";
     } elseif ($qualification === '') {
@@ -51,10 +65,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     } else {
         if (!empty($_POST['rule_id'])) {
             $id = intval($_POST['rule_id']);
-            $q = "UPDATE eligibility_rules SET course_id=$course_id, qualification='$qualification', min_percentage=$min_percentage, notes='$notes', display_order=$display_order, status='$status' WHERE id=$id";
+            $q = "UPDATE eligibility_rules SET course_id=$course_id, qualification='$qualification', min_percentage=$min_percentage, notes='$notes', display_order=$display_order, status='$status'$extra_set WHERE id=$id";
             $message = mysqli_query($conn, $q) ? "Rule updated successfully!" : "Error updating rule.";
         } else {
-            $q = "INSERT INTO eligibility_rules (course_id, qualification, min_percentage, notes, display_order, status) VALUES ($course_id, '$qualification', $min_percentage, '$notes', $display_order, '$status')";
+            $q = "INSERT INTO eligibility_rules (course_id, qualification, min_percentage, notes, display_order, status$extra_cols) VALUES ($course_id, '$qualification', $min_percentage, '$notes', $display_order, '$status'$extra_vals)";
             if (mysqli_query($conn, $q)) {
                 $new_id = mysqli_insert_id($conn);
                 header('Location: manage_eligibility.php?edit=' . $new_id . '&msg=' . urlencode('Rule added successfully!'));
@@ -177,6 +191,25 @@ $unconfigured = array_diff_key($courses, array_flip($configured_ids));
                     <input id="auto_AdminCP_manage_eligibility_php_6" type="text" name="notes" value="<?php echo $edit_rule ? htmlspecialchars($edit_rule['notes']) : ''; ?>" placeholder="e.g., Chemistry and Biology required as subjects">
                 </div>
 
+                <?php if ($elg_has_extra): ?>
+                <div style="display:grid;grid-template-columns:1fr 2fr;gap:20px;">
+                    <div class="form-group">
+                        <label for="elg_max_years">Passing Year Limit (optional)</label>
+                        <input id="elg_max_years" type="number" name="max_years_since_passing" min="0" max="50" step="1" value="<?php echo ($edit_rule && $edit_rule['max_years_since_passing'] !== null) ? (int) $edit_rule['max_years_since_passing'] : ''; ?>" placeholder="e.g., 2">
+                        <small style="color:var(--text-light);">Qualification must be passed within this many years. Leave blank if there's no limit &mdash; the checker then won't ask for a passing year.</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="elg_requirements">Program-Specific Requirements (optional, one per line)</label>
+                        <textarea id="elg_requirements" name="requirements" rows="3" placeholder="e.g.&#10;Biology studied as a subject&#10;Entry test cleared"><?php echo $edit_rule ? htmlspecialchars($edit_rule['requirements'] ?? '') : ''; ?></textarea>
+                        <small style="color:var(--text-light);">Students answer Yes / No / Not sure. &ldquo;No&rdquo; shows Not Eligible; &ldquo;Not sure&rdquo; shows Requires Further Review. Add only verified college criteria.</small>
+                    </div>
+                </div>
+                <?php else: ?>
+                <div style="background:#fff8e1;border-left:4px solid #f59e0b;border-radius:8px;padding:10px 14px;font-size:12.5px;margin-bottom:18px;">
+                    <i class="fas fa-triangle-exclamation"></i> Run <strong>add_eligibility_rule_fields.sql</strong> in phpMyAdmin to enable the Passing Year Limit and Program-Specific Requirements options.
+                </div>
+                <?php endif; ?>
+
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> <?php echo $edit_rule ? 'Save Changes' : 'Add Rule'; ?></button>
                 <?php if ($edit_rule): ?>
                     <a href="manage_eligibility.php" class="btn btn-primary" style="background: var(--text-light); margin-left: 10px;">Cancel</a>
@@ -199,7 +232,7 @@ $unconfigured = array_diff_key($courses, array_flip($configured_ids));
         <!-- List -->
         <div class="card" style="overflow-x:auto;">
             <table class="data-table">
-                <thead><tr><th>Program</th><th>Qualification</th><th>Min %</th><th>Notes</th><th>Status</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Program</th><th>Qualification</th><th>Min %</th><th>Passing Year</th><th>Extra Requirements</th><th>Notes</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>
                 <?php if ($rules_result && mysqli_num_rows($rules_result) > 0): ?>
                     <?php while ($r = mysqli_fetch_assoc($rules_result)): ?>
@@ -207,6 +240,8 @@ $unconfigured = array_diff_key($courses, array_flip($configured_ids));
                             <td><strong><?php echo htmlspecialchars($r['course_name'] ?: 'Unknown Program'); ?></strong></td>
                             <td><?php echo htmlspecialchars($r['qualification']); ?></td>
                             <td><?php echo rtrim(rtrim(number_format($r['min_percentage'], 2), '0'), '.'); ?>%</td>
+                            <td><?php echo (isset($r['max_years_since_passing']) && $r['max_years_since_passing'] !== null) ? 'Within ' . (int) $r['max_years_since_passing'] . ' yr' : '—'; ?></td>
+                            <td><?php $rq = array_filter(array_map('trim', preg_split('/\R/', (string) ($r['requirements'] ?? '')))); echo $rq ? count($rq) : '—'; ?></td>
                             <td><?php echo htmlspecialchars($r['notes'] ?: '—'); ?></td>
                             <td><span class="status-pill" style="background: <?php echo $r['status'] == 'active' ? '#16A34A' : '#DC2626'; ?>;"><?php echo ucfirst($r['status']); ?></span></td>
                             <td>
@@ -216,7 +251,7 @@ $unconfigured = array_diff_key($courses, array_flip($configured_ids));
                         </tr>
                     <?php endwhile; ?>
                 <?php else: ?>
-                    <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-light);">
+                    <tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-light);">
                         <i class="fas fa-clipboard-check" style="font-size:48px;opacity:0.3;display:block;margin-bottom:14px;"></i>
                         No eligibility rules configured yet. Add your first verified rule above.
                     </td></tr>

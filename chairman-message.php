@@ -3,14 +3,11 @@ require_once 'includes/config.php';
 $page_title = "Chairman's Message";
 $page_description = "Read a message from the Chairman of Bahawal College of Health Sciences on our vision for quality health sciences education.";
 
-// Reuses the existing Leadership CMS (AdminCP > Home Page > Leadership) — no separate
-// admin section to duplicate. We identify the Chairman by designation/role containing
-// "chairman", matching how the entry is already tagged in the real leadership data.
-$chairman = mysqli_fetch_assoc(mysqli_query($conn, "
-    SELECT * FROM leadership
-    WHERE status = 'active' AND (LOWER(designation) LIKE '%chairman%' OR LOWER(role_title) LIKE '%chairman%')
-    ORDER BY display_order ASC LIMIT 1
-"));
+// Reuses the existing Leadership CMS (AdminCP > Home Page > Leadership): the entry whose
+// Designation or Role Title contains "Chairman" is shown here (see getMessageLeader()).
+$chairman = getMessageLeader('chairman');
+$placeholder = getMessagePlaceholder('chairman');
+$other_leader = getMessageLeader('principal');
 ?>
 <?php include 'includes/header.php'; ?>
 
@@ -116,6 +113,16 @@ $chairman = mysqli_fetch_assoc(mysqli_query($conn, "
 .chm-placeholder i { font-size:44px; color:var(--border-color); margin-bottom:16px; display:block; }
 .chm-placeholder h3 { color:var(--text-dark); font-size:18px; margin:0 0 8px; }
 .chm-placeholder p { color:var(--text-light); font-size:13.5px; margin:0 auto; max-width:460px; line-height:1.7; }
+
+.msg-xlink { display:flex; align-items:center; gap:14px; max-width:460px; margin:28px auto 0; padding:14px 18px; background:#fff; border:1px solid rgba(23,22,91,0.1); border-radius:14px; text-decoration:none; transition:all 0.25s ease; }
+.msg-xlink:hover { border-color:var(--primary-color); box-shadow:0 10px 26px rgba(23,22,91,0.1); transform:translateY(-2px); }
+.msg-xlink-photo { width:52px; height:52px; border-radius:50%; overflow:hidden; flex-shrink:0; background:rgba(23,22,91,0.08); display:flex; align-items:center; justify-content:center; color:var(--primary-color); font-size:20px; }
+.msg-xlink-photo img { width:100%; height:100%; object-fit:cover; }
+.msg-xlink > span:nth-child(2) { flex:1; display:flex; flex-direction:column; }
+.msg-xlink small { font-size:10.5px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--text-light); }
+.msg-xlink strong { font-size:15px; color:var(--text-dark); font-weight:800; }
+.msg-xlink em { font-style:normal; font-size:12.5px; color:var(--text-light); }
+.msg-xlink > i { color:var(--primary-color); }
 </style>
 
 <!-- HERO -->
@@ -172,9 +179,17 @@ $chairman = mysqli_fetch_assoc(mysqli_query($conn, "
         <?php else: ?>
         <div class="chm-placeholder">
             <i class="fas fa-user-tie"></i>
-            <h3>Chairman's Message — Coming Soon</h3>
-            <p>The Chairman's verified name, photo and message have not been published yet. This page will be updated once confirmed — nothing here is fabricated in the meantime.</p>
+            <h3><?php echo htmlspecialchars($placeholder['title']); ?></h3>
+            <p><?php echo nl2br(htmlspecialchars($placeholder['text'])); ?></p>
         </div>
+        <?php endif; ?>
+
+        <?php if ($other_leader): ?>
+        <a class="msg-xlink" href="principal-message.php">
+            <span class="msg-xlink-photo"><?php if (!empty($other_leader['photo'])): ?><img src="<?php echo htmlspecialchars($other_leader['photo']); ?>" alt=""><?php else: ?><i class="fas fa-user-tie"></i><?php endif; ?></span>
+            <span><small>Also read</small><strong>Principal's Message</strong><em><?php echo htmlspecialchars($other_leader['name']); ?></em></span>
+            <i class="fas fa-arrow-right"></i>
+        </a>
         <?php endif; ?>
     </div>
 </section>

@@ -7,7 +7,7 @@ $_seoDesc = (isset($page_description) && $page_description)
     ? $page_description
     : getSiteName() . ' — Excellence in Health Sciences Education. Explore our programs, admissions, faculty and campus life.';
 $_seoImage = rtrim(SITE_URL, '/') . '/' . ltrim((isset($page_image) && $page_image) ? $page_image : getLogoPath(), '/');
-$_seoCanonical = rtrim(SITE_URL, '/') . '/' . basename($_SERVER['SCRIPT_NAME'] ?? 'index.php');
+$_seoCanonical = rtrim(SITE_URL, '/') . '/' . ((isset($page_canonical) && $page_canonical) ? ltrim($page_canonical, '/') : basename($_SERVER['SCRIPT_NAME'] ?? 'index.php'));
 ?>
 <!DOCTYPE html>
 <html lang="en">

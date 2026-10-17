@@ -1,0 +1,3 @@
+# Applicant documents (CNIC, photos, certificates) — never served directly.
+# Admins download them through AdminCP/admission_file.php.
+Require all denied

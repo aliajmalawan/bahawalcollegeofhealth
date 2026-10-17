@@ -16,6 +16,11 @@ csrf_guard();
 
 $message = '';
 
+// image / training_details / is_verified exist only after add_clinical_training_fields.sql is run
+$ct_has_extra = dbColumnExists($conn, 'clinical_partners', 'image')
+             && dbColumnExists($conn, 'clinical_partners', 'training_details')
+             && dbColumnExists($conn, 'clinical_partners', 'is_verified');
+
 // Image compression function (same approach used by Manage Gallery)
 function compressImage($source, $destination, $quality = 80) {
     $info = getimagesize($source);
@@ -36,9 +41,11 @@ function compressImage($source, $destination, $quality = 80) {
 // Handle delete (also removes the uploaded logo, if any)
 if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id'])) {
     $id = intval($_GET['id']);
-    $row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT logo FROM clinical_partners WHERE id = $id"));
-    if ($row && !empty($row['logo']) && file_exists('../' . $row['logo'])) {
-        unlink('../' . $row['logo']);
+    $row = mysqli_fetch_assoc(mysqli_query($conn, "SELECT * FROM clinical_partners WHERE id = $id"));
+    foreach (['logo', 'image'] as $img_col) {
+        if ($row && !empty($row[$img_col]) && file_exists('../' . $row[$img_col])) {
+            unlink('../' . $row[$img_col]);
+        }
     }
     if (mysqli_query($conn, "DELETE FROM clinical_partners WHERE id = $id")) {
         $message = "Clinical partner removed successfully!";
@@ -84,13 +91,47 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
         $logo_sql = $logo_path !== null ? ", logo='" . mysqli_real_escape_string($conn, $logo_path) . "'" : '';
 
+        // Hospital photo (optional, shown as the card banner) + verified training details
+        $extra_set = '';
+        $extra_cols = '';
+        $extra_vals = '';
+        if ($ct_has_extra) {
+            $training_details = mysqli_real_escape_string($conn, trim($_POST['training_details'] ?? ''));
+            $is_verified = !empty($_POST['is_verified']) ? 1 : 0;
+            $extra_set  = ", training_details='$training_details', is_verified=$is_verified";
+            $extra_cols = ', training_details, is_verified';
+            $extra_vals = ", '$training_details', $is_verified";
+
+            if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
+                $upload_dir = '../uploads/clinical/';
+                if (!file_exists($upload_dir)) mkdir($upload_dir, 0777, true);
+                $ext = strtolower(pathinfo($_FILES['image']['name'], PATHINFO_EXTENSION));
+                if (in_array($ext, ['jpg', 'jpeg', 'png', 'webp'])) {
+                    $filename = 'hospital_' . time() . '_' . uniqid() . '.jpg';
+                    if (compressImage($_FILES['image']['tmp_name'], $upload_dir . $filename, 80)) {
+                        $image_path = 'uploads/clinical/' . $filename;
+                        if (!empty($_POST['partner_id'])) {
+                            $old = mysqli_fetch_assoc(mysqli_query($conn, "SELECT image FROM clinical_partners WHERE id = " . intval($_POST['partner_id'])));
+                            if ($old && !empty($old['image']) && file_exists('../' . $old['image'])) {
+                                unlink('../' . $old['image']);
+                            }
+                        }
+                        $esc = mysqli_real_escape_string($conn, $image_path);
+                        $extra_set  .= ", image='$esc'";
+                        $extra_cols .= ', image';
+                        $extra_vals .= ", '$esc'";
+                    }
+                }
+            }
+        }
+
         if (!empty($_POST['partner_id'])) {
             $id = intval($_POST['partner_id']);
-            $q = "UPDATE clinical_partners SET hospital_name='$hospital_name', location='$location', description='$description', facilities='$facilities', programs='$programs', website='$website', display_order=$display_order, status='$status'$logo_sql WHERE id=$id";
+            $q = "UPDATE clinical_partners SET hospital_name='$hospital_name', location='$location', description='$description', facilities='$facilities', programs='$programs', website='$website', display_order=$display_order, status='$status'$logo_sql$extra_set WHERE id=$id";
             $message = mysqli_query($conn, $q) ? "Clinical partner updated successfully!" : "Error updating clinical partner.";
         } else {
             $logo_col_sql = $logo_path !== null ? "'" . mysqli_real_escape_string($conn, $logo_path) . "'" : 'NULL';
-            $q = "INSERT INTO clinical_partners (hospital_name, location, description, facilities, programs, website, display_order, status, logo) VALUES ('$hospital_name', '$location', '$description', '$facilities', '$programs', '$website', $display_order, '$status', $logo_col_sql)";
+            $q = "INSERT INTO clinical_partners (hospital_name, location, description, facilities, programs, website, display_order, status, logo$extra_cols) VALUES ('$hospital_name', '$location', '$description', '$facilities', '$programs', '$website', $display_order, '$status', $logo_col_sql$extra_vals)";
             if (mysqli_query($conn, $q)) {
                 $new_id = mysqli_insert_id($conn);
                 header('Location: manage_clinical_training.php?edit=' . $new_id . '&msg=' . urlencode('Clinical partner added successfully!'));
@@ -189,6 +230,25 @@ $show_form = $edit_partner || $_SERVER['REQUEST_METHOD'] === 'POST';
                     </div>
                 </div>
 
+                <?php if ($ct_has_extra): ?>
+                <div class="form-group">
+                    <label for="ct_training_details">Training Details (one per line &mdash; shown only when the partnership is verified)</label>
+                    <textarea id="ct_training_details" name="training_details" rows="4" placeholder="e.g.&#10;Rotation: 6 weeks per semester&#10;Timings: 8:00 AM &ndash; 2:00 PM&#10;Supervised by hospital consultants"><?php echo $edit_partner ? htmlspecialchars($edit_partner['training_details'] ?? '') : ''; ?></textarea>
+                </div>
+                <div class="form-group">
+                    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-weight:600;">
+                        <input type="checkbox" name="is_verified" value="1" style="width:auto;margin-top:3px;" <?php echo ($edit_partner && !empty($edit_partner['is_verified'])) ? 'checked' : ''; ?>>
+                        <span>Verified partnership
+                            <small style="display:block;font-weight:400;color:var(--text-light);margin-top:2px;">Tick only when a formal agreement / MoU or written confirmation with this hospital exists. Verified sites show a &ldquo;Verified Partner&rdquo; badge and their Training Details on the public page.</small>
+                        </span>
+                    </label>
+                </div>
+                <?php else: ?>
+                <div style="background:#fff8e1;border-left:4px solid #f59e0b;border-radius:8px;padding:10px 14px;font-size:12.5px;margin-bottom:18px;">
+                    <i class="fas fa-triangle-exclamation"></i> Run <strong>add_clinical_training_fields.sql</strong> in phpMyAdmin to enable Hospital Photo, Training Details and the Verified Partnership option.
+                </div>
+                <?php endif; ?>
+
                 <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px;">
                     <div class="form-group">
                         <label for="auto_AdminCP_manage_clinical_training_php_6">Website (optional)</label>
@@ -207,11 +267,22 @@ $show_form = $edit_partner || $_SERVER['REQUEST_METHOD'] === 'POST';
                     </div>
                 </div>
 
-                <div class="form-group">
-                    <label for="auto_AdminCP_manage_clinical_training_php_9">Logo / Photo (optional)</label>
-                    <input id="auto_AdminCP_manage_clinical_training_php_9" type="file" name="logo" accept="image/*">
-                    <?php if ($edit_partner && !empty($edit_partner['logo'])): ?>
-                        <img src="../<?php echo htmlspecialchars($edit_partner['logo']); ?>" style="height:60px;border-radius:8px;margin-top:8px;display:block;">
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                    <div class="form-group">
+                        <label for="auto_AdminCP_manage_clinical_training_php_9">Hospital Logo (optional)</label>
+                        <input id="auto_AdminCP_manage_clinical_training_php_9" type="file" name="logo" accept="image/*">
+                        <?php if ($edit_partner && !empty($edit_partner['logo'])): ?>
+                            <img src="../<?php echo htmlspecialchars($edit_partner['logo']); ?>" style="height:60px;border-radius:8px;margin-top:8px;display:block;">
+                        <?php endif; ?>
+                    </div>
+                    <?php if ($ct_has_extra): ?>
+                    <div class="form-group">
+                        <label for="ct_image">Hospital Photo (optional, card banner &mdash; landscape works best)</label>
+                        <input id="ct_image" type="file" name="image" accept="image/*">
+                        <?php if ($edit_partner && !empty($edit_partner['image'])): ?>
+                            <img src="../<?php echo htmlspecialchars($edit_partner['image']); ?>" style="height:60px;border-radius:8px;margin-top:8px;display:block;">
+                        <?php endif; ?>
+                    </div>
                     <?php endif; ?>
                 </div>
 
@@ -237,7 +308,7 @@ $show_form = $edit_partner || $_SERVER['REQUEST_METHOD'] === 'POST';
         <!-- List -->
         <div class="card" style="overflow-x:auto;">
             <table class="data-table">
-                <thead><tr><th>Order</th><th>Hospital / Facility</th><th>Location</th><th>Programs</th><th>Status</th><th>Actions</th></tr></thead>
+                <thead><tr><th>Order</th><th>Hospital / Facility</th><th>Location</th><th>Programs</th><th>Verified</th><th>Status</th><th>Actions</th></tr></thead>
                 <tbody>
                 <?php if ($partners_result && mysqli_num_rows($partners_result) > 0): ?>
                     <?php while ($p = mysqli_fetch_assoc($partners_result)): ?>
@@ -246,6 +317,7 @@ $show_form = $edit_partner || $_SERVER['REQUEST_METHOD'] === 'POST';
                             <td><strong><?php echo htmlspecialchars($p['hospital_name']); ?></strong></td>
                             <td><?php echo htmlspecialchars($p['location'] ?: '—'); ?></td>
                             <td><?php echo htmlspecialchars($p['programs'] ? implode(', ', array_slice(array_filter(array_map('trim', explode("\n", $p['programs']))), 0, 3)) : '—'); ?></td>
+                            <td><?php echo !empty($p['is_verified']) ? '<i class="fas fa-circle-check" style="color:#16A34A;"></i> Yes' : '<span style="color:var(--text-light);">No</span>'; ?></td>
                             <td><span class="status-pill" style="background: <?php echo $p['status'] == 'active' ? '#16A34A' : '#DC2626'; ?>;"><?php echo ucfirst($p['status']); ?></span></td>
                             <td>
                                 <a href="?edit=<?php echo $p['id']; ?>" class="action-btn btn-edit"><i class="fas fa-edit"></i></a>
@@ -254,9 +326,9 @@ $show_form = $edit_partner || $_SERVER['REQUEST_METHOD'] === 'POST';
                         </tr>
                     <?php endwhile; ?>
                 <?php else: ?>
-                    <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-light);">
+                    <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--text-light);">
                         <i class="fas fa-hospital" style="font-size:48px;opacity:0.3;display:block;margin-bottom:14px;"></i>
-                        No clinical partners added yet. Add your first verified hospital / training partner above.
+                        No hospitals added yet. Add your first hospital / clinical training site above.
                     </td></tr>
                 <?php endif; ?>
                 </tbody>

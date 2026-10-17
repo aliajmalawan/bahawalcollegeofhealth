@@ -64,6 +64,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $details = mysqli_real_escape_string($conn, trim($_POST['details'] ?? ''));
     $display_order = intval($_POST['display_order'] ?? 0);
     $visibility = ($_POST['visibility'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
+    // "Foundation project" flag — shown on the Bahawal Welfare Foundation page (needs add_foundation_fields.sql)
+    $has_fdn_col = dbColumnExists($conn, 'projects', 'is_foundation');
+    $is_foundation = !empty($_POST['is_foundation']) ? 1 : 0;
+    $fdn_set = $has_fdn_col ? ", is_foundation=$is_foundation" : '';
+    $fdn_col = $has_fdn_col ? ', is_foundation' : '';
+    $fdn_val = $has_fdn_col ? ", $is_foundation" : '';
 
     if ($title === '') {
         $message = "Project title is required.";
@@ -93,11 +99,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
         if (!empty($_POST['project_id'])) {
             $id = intval($_POST['project_id']);
-            $q = "UPDATE projects SET title='$title', category='$category', project_date=$project_date_sql, status='$status', description='$description', details='$details', display_order=$display_order, visibility='$visibility'$image_sql WHERE id=$id";
+            $q = "UPDATE projects SET title='$title', category='$category', project_date=$project_date_sql, status='$status', description='$description', details='$details', display_order=$display_order, visibility='$visibility'$image_sql$fdn_set WHERE id=$id";
             $message = mysqli_query($conn, $q) ? "Project updated successfully!" : "Error updating project.";
         } else {
             $image_col_sql = $image_path !== null ? "'" . mysqli_real_escape_string($conn, $image_path) . "'" : 'NULL';
-            $q = "INSERT INTO projects (title, category, project_date, status, description, details, display_order, visibility, image) VALUES ('$title', '$category', $project_date_sql, '$status', '$description', '$details', $display_order, '$visibility', $image_col_sql)";
+            $q = "INSERT INTO projects (title, category, project_date, status, description, details, display_order, visibility, image$fdn_col) VALUES ('$title', '$category', $project_date_sql, '$status', '$description', '$details', $display_order, '$visibility', $image_col_sql$fdn_val)";
             if (mysqli_query($conn, $q)) {
                 $new_id = mysqli_insert_id($conn);
                 header('Location: manage_projects.php?edit=' . $new_id . '&msg=' . urlencode('Project added successfully!'));
@@ -177,7 +183,11 @@ $show_form = $edit_project || $_SERVER['REQUEST_METHOD'] === 'POST';
                     </div>
                     <div class="form-group">
                         <label for="auto_AdminCP_manage_projects_php_2">Category</label>
-                        <input id="auto_AdminCP_manage_projects_php_2" type="text" name="category" value="<?php echo $edit_project ? htmlspecialchars($edit_project['category']) : ''; ?>" placeholder="e.g., Community Health">
+                        <input id="auto_AdminCP_manage_projects_php_2" type="text" name="category" list="prjCategoryList" value="<?php echo $edit_project ? htmlspecialchars($edit_project['category']) : ''; ?>" placeholder="e.g., Community Health">
+                        <datalist id="prjCategoryList">
+                            <?php $pcr = mysqli_query($conn, "SELECT DISTINCT category FROM projects WHERE category IS NOT NULL AND category <> '' ORDER BY category ASC"); if ($pcr) { while ($pc = mysqli_fetch_assoc($pcr)) { echo '<option value="' . htmlspecialchars($pc['category']) . '">'; } } ?>
+                        </datalist>
+                        <small style="color:var(--text-light);">Reuse an existing category where possible — categories become filter buttons on the public Projects page.</small>
                     </div>
                 </div>
 
@@ -226,6 +236,14 @@ $show_form = $edit_project || $_SERVER['REQUEST_METHOD'] === 'POST';
                         </select>
                     </div>
                 </div>
+                <?php if (dbColumnExists($conn, 'projects', 'is_foundation')): ?>
+                <div class="form-group">
+                    <label style="display:flex;align-items:center;gap:9px;cursor:pointer;font-weight:600;">
+                        <input type="checkbox" name="is_foundation" value="1" style="width:auto;" <?php echo ($edit_project && !empty($edit_project['is_foundation'])) ? 'checked' : ''; ?>>
+                        Bahawal Welfare Foundation project <small style="font-weight:400;color:var(--text-light);">(also shown on the Foundation page)</small>
+                    </label>
+                </div>
+                <?php endif; ?>
 
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> <?php echo $edit_project ? 'Save Changes' : 'Add Project'; ?></button>
                 <?php if ($edit_project): ?>

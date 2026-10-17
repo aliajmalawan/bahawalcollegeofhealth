@@ -5,6 +5,7 @@ session_start([
     'cookie_secure' => (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off'),
 ]);
 require_once '../includes/config.php';
+require_once '../includes/admission_helper.php';
 
 if (!isset($_SESSION['admin_logged_in'])) {
     header('Location: login.php');
@@ -76,6 +77,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                         }
                     }
                 }
+            }
+        }
+        // Converting an application without a new upload: copy the applicant's photograph into uploads/students/
+        if ($photo_path === null && empty($_POST['student_id']) && !empty($_POST['converted_from_admission_id'])) {
+            $adm_files = getApplicationFiles($conn, intval($_POST['converted_from_admission_id']));
+            if (!empty($adm_files['photo'][0])) {
+                $src = '../' . $adm_files['photo'][0]['file_path'];
+                $ext = $adm_files['photo'][0]['mime_type'] === 'image/png' ? 'png' : 'jpg';
+                if (!file_exists('../uploads/students/')) mkdir('../uploads/students/', 0777, true);
+                $filename = 'student_' . time() . '_' . uniqid() . '.' . $ext;
+                if (is_file($src) && copy($src, '../uploads/students/' . $filename)) $photo_path = 'uploads/students/' . $filename;
             }
         }
         $photo_sql = $photo_path !== null ? ", photo='" . mysqli_real_escape_string($conn, $photo_path) . "'" : '';
@@ -239,7 +251,16 @@ $show_form = $edit_student || $from_admission || $_SERVER['REQUEST_METHOD'] === 
                         'address' => $from_admission['address'],
                         'course_id' => $from_admission['course_id'],
                         'previous_education' => $from_admission['previous_education'],
+                        'gender' => $from_admission['gender'] ?? 'male',
+                        'date_of_birth' => $from_admission['date_of_birth'] ?? '',
                     ];
+                    $adm_files = getApplicationFiles($conn, $from_admission['id']);
+                    if (!empty($adm_files['photo'][0])): ?>
+                    <div style="display:flex;align-items:center;gap:12px;background:#e7f3ff;border-radius:8px;padding:10px 14px;margin-bottom:16px;font-size:13px;">
+                        <img src="admission_file.php?id=<?php echo (int) $adm_files['photo'][0]['id']; ?>" alt="" style="width:46px;height:54px;object-fit:cover;border-radius:6px;">
+                        <span>The applicant's photograph will be used as the student photo unless you upload a different one below.</span>
+                    </div>
+                    <?php endif;
                 }
                 ?>
 

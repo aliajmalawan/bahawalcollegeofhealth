@@ -1,7 +1,7 @@
 <?php
 require_once 'includes/config.php';
 $page_title = 'Affiliations & Accreditation';
-$page_description = 'View the affiliations and accreditations held by Bahawal College of Health Sciences, recognized by leading educational and health authorities.';
+$page_description = 'Affiliation and accreditation records of Bahawal College of Health Sciences, including status, related programs and validity.';
 
 $records = [];
 $rr = mysqli_query($conn, "SELECT * FROM accreditations WHERE visibility='active' ORDER BY display_order ASC, id ASC");
@@ -11,6 +11,41 @@ if ($rr) {
     }
 }
 $has_records = count($records) > 0;
+$today = date('Y-m-d');
+
+// A record whose validity date has passed is never shown as current, whatever its saved status
+foreach ($records as &$rec) {
+    $rec['_lapsed'] = !empty($rec['valid_until']) && $rec['valid_until'] < $today && in_array($rec['status'], ['accredited', 'provisional'], true);
+    $rec['_status'] = $rec['_lapsed'] ? 'expired' : $rec['status'];
+}
+unset($rec);
+
+// Program affiliations already recorded on each program (AdminCP > Academics > Courses),
+// shown so this page agrees with the program pages. Skipped when an accreditation
+// record above already covers the same organization.
+$program_affiliations = [];
+$pa = mysqli_query($conn, "SELECT id, name, affiliation FROM courses WHERE status='active' AND affiliation IS NOT NULL AND TRIM(affiliation) <> '' ORDER BY display_order ASC, name ASC");
+if ($pa) {
+    $orgs = array_map(function ($r) { return strtolower(trim($r['organization_name'])); }, $records);
+    while ($row = mysqli_fetch_assoc($pa)) {
+        $aff = trim($row['affiliation']);
+        $covered = false;
+        foreach ($orgs as $o) {
+            if ($o !== '' && (stripos($aff, $o) !== false || stripos($o, strtolower($aff)) !== false)) { $covered = true; break; }
+        }
+        if (!$covered) $program_affiliations[$aff][] = $row;
+    }
+}
+
+// Admin-editable page text (AdminCP > Affiliations & Accreditation > Page Text)
+$acc_intro = getSetting('acc_intro_text', 'Our affiliation and accreditation status with regulatory bodies, councils and academic institutions — shown transparently, including records still pending or under review.');
+$acc_placeholder_title = getSetting('acc_placeholder_title', 'Accreditation Records — To Be Published');
+$acc_placeholder_text = getSetting('acc_placeholder_text', 'Details of our affiliations and accreditation will be published here once they have been confirmed by the college administration.');
+
+function accUrl($url) {
+    $url = trim((string) $url);
+    return preg_match('#^https?://[^\s]+$#i', $url) ? $url : '';
+}
 
 $status_meta = [
     'accredited'  => ['label' => 'Accredited',            'color' => '#16A34A', 'bg' => 'rgba(22,163,74,0.1)',  'icon' => 'fa-circle-check'],
@@ -129,6 +164,21 @@ $status_meta = [
 .acc-placeholder i { font-size:44px; color:var(--border-color); margin-bottom:16px; display:block; }
 .acc-placeholder h3 { color:var(--text-dark); font-size:18px; margin:0 0 8px; }
 .acc-placeholder p { color:var(--text-light); font-size:13.5px; margin:0 auto; max-width:460px; line-height:1.7; }
+
+.acc-validity.acc-lapsed { color:#DC2626; }
+.acc-note { text-align:center; font-size:12px; color:var(--text-light); max-width:680px; margin:30px auto 0; line-height:1.7; }
+.acc-note i { color:var(--primary-color); }
+.acc-progaff { margin-top:46px; }
+.acc-progaff-head { text-align:center; margin-bottom:22px; }
+.acc-progaff-head h2 { font-size:22px; font-weight:800; color:var(--text-dark); margin:0 0 6px; }
+.acc-progaff-head p { font-size:13.5px; color:var(--text-light); margin:0 auto; max-width:560px; }
+.acc-progaff-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(300px,1fr)); gap:16px; }
+.acc-progaff-card { background:#fff; border:1px solid rgba(23,22,91,0.1); border-radius:16px; padding:18px 20px; display:flex; gap:14px; }
+.acc-progaff-ico { width:44px; height:44px; border-radius:12px; background:rgba(23,22,91,0.08); color:var(--primary-color); display:flex; align-items:center; justify-content:center; font-size:18px; flex-shrink:0; }
+.acc-progaff-card h4 { margin:0 0 4px; font-size:14.5px; font-weight:800; color:var(--text-dark); line-height:1.35; }
+.acc-progaff-card small { display:block; font-size:11px; color:var(--text-light); text-transform:uppercase; letter-spacing:0.6px; font-weight:700; margin-bottom:6px; }
+.acc-progaff-card a { display:inline-block; font-size:12px; font-weight:600; color:#078FB8; background:rgba(9,169,217,0.08); border:1px solid rgba(9,169,217,0.22); border-radius:6px; padding:2px 9px; margin:3px 4px 0 0; text-decoration:none; }
+.acc-progaff-card a:hover { background:rgba(9,169,217,0.15); }
 </style>
 
 <!-- HERO -->
@@ -140,10 +190,10 @@ $status_meta = [
             <span>Affiliations &amp; Accreditation</span>
         </div>
         <div class="acc-hero-badge">
-            <i class="fas fa-certificate"></i> Verified Records
+            <i class="fas fa-certificate"></i> Transparency
         </div>
         <h1>Affiliations &amp; <span>Accreditation</span></h1>
-        <p>Our verified accreditation and affiliation status with regulatory bodies, councils and academic institutions — shown transparently, including records still pending or under review.</p>
+        <p><?php echo htmlspecialchars($acc_intro); ?></p>
     </div>
 </section>
 
@@ -153,7 +203,7 @@ $status_meta = [
 
         <?php if ($has_records): ?>
         <div class="acc-legend">
-            <?php foreach ($status_meta as $meta): ?>
+            <?php $used = array_unique(array_column($records, '_status')); foreach ($status_meta as $sk => $meta): if (!in_array($sk, $used, true)) continue; ?>
             <span class="acc-legend-item" style="background:<?php echo $meta['bg']; ?>;color:<?php echo $meta['color']; ?>;"><i class="fas <?php echo $meta['icon']; ?>"></i> <?php echo $meta['label']; ?></span>
             <?php endforeach; ?>
         </div>
@@ -162,17 +212,21 @@ $status_meta = [
         <div class="acc-grid">
             <?php if ($has_records): ?>
                 <?php foreach ($records as $r):
-                    $meta = $status_meta[$r['status']];
+                    $meta = $status_meta[$r['_status']] ?? $status_meta['pending'];
                     $validity_text = '';
+                    $fmt = function ($d) { return date('d M Y', strtotime($d)); };
                     if ($r['status'] === 'pending') {
                         $validity_text = 'Application under review';
+                    } elseif ($r['_lapsed']) {
+                        $validity_text = 'Validity ended on ' . $fmt($r['valid_until']) . ' — renewal status to be confirmed';
                     } elseif (!empty($r['valid_from']) && !empty($r['valid_until'])) {
-                        $validity_text = 'Valid: ' . date('M Y', strtotime($r['valid_from'])) . ' – ' . date('M Y', strtotime($r['valid_until']));
+                        $validity_text = 'Valid: ' . $fmt($r['valid_from']) . ' – ' . $fmt($r['valid_until']);
                     } elseif (!empty($r['valid_until'])) {
-                        $validity_text = 'Valid until ' . date('M Y', strtotime($r['valid_until']));
+                        $validity_text = 'Valid until ' . $fmt($r['valid_until']);
                     } elseif (!empty($r['valid_from'])) {
-                        $validity_text = 'Valid from ' . date('M Y', strtotime($r['valid_from']));
+                        $validity_text = 'Valid from ' . $fmt($r['valid_from']);
                     }
+                    $site = accUrl($r['website']);
                 ?>
                 <div class="acc-card">
                     <div class="acc-card-logo">
@@ -198,27 +252,52 @@ $status_meta = [
                         <?php endif; ?>
 
                         <?php if (!empty($r['description'])): ?>
-                        <p class="acc-desc"><?php echo htmlspecialchars($r['description']); ?></p>
+                        <p class="acc-desc"><?php echo nl2br(htmlspecialchars($r['description'])); ?></p>
                         <?php endif; ?>
 
                         <?php if ($validity_text): ?>
-                        <div class="acc-validity"><i class="fas fa-calendar-check"></i> <?php echo htmlspecialchars($validity_text); ?></div>
+                        <div class="acc-validity<?php echo $r['_lapsed'] ? ' acc-lapsed' : ''; ?>"><i class="fas <?php echo $r['_lapsed'] ? 'fa-calendar-xmark' : 'fa-calendar-check'; ?>"></i> <?php echo htmlspecialchars($validity_text); ?></div>
                         <?php endif; ?>
 
-                        <?php if (!empty($r['website'])): ?>
-                        <a href="<?php echo htmlspecialchars($r['website']); ?>" target="_blank" rel="noopener" class="acc-website">Verify / View Source <i class="fas fa-arrow-up-right-from-square" style="font-size:9px;"></i></a>
+                        <?php if ($site): ?>
+                        <a href="<?php echo htmlspecialchars($site); ?>" target="_blank" rel="noopener" class="acc-website">Verify / View Source <i class="fas fa-arrow-up-right-from-square" style="font-size:9px;"></i></a>
                         <?php endif; ?>
                     </div>
                 </div>
                 <?php endforeach; ?>
-            <?php else: ?>
+            <?php elseif (!$program_affiliations): ?>
                 <div class="acc-placeholder">
                     <i class="fas fa-certificate"></i>
-                    <h3>Accreditation Records — To Be Published</h3>
-                    <p>This section is ready to display our verified affiliations and accreditation status. Records will appear here as they are added and confirmed by the college administration — nothing is shown until it's been verified.</p>
+                    <h3><?php echo htmlspecialchars($acc_placeholder_title); ?></h3>
+                    <p><?php echo nl2br(htmlspecialchars($acc_placeholder_text)); ?></p>
                 </div>
             <?php endif; ?>
         </div>
+
+        <?php if ($program_affiliations): ?>
+        <div class="acc-progaff">
+            <div class="acc-progaff-head">
+                <h2>Program <span style="color:var(--primary-color);">Affiliations</span></h2>
+                <p>University affiliations as listed for each of our programs.</p>
+            </div>
+            <div class="acc-progaff-grid">
+                <?php foreach ($program_affiliations as $aff => $progs): ?>
+                <div class="acc-progaff-card">
+                    <div class="acc-progaff-ico"><i class="fas fa-building-columns"></i></div>
+                    <div>
+                        <small>Affiliated with</small>
+                        <h4><?php echo htmlspecialchars($aff); ?></h4>
+                        <?php foreach ($progs as $pg): ?><a href="course.php?id=<?php echo (int) $pg['id']; ?>"><?php echo htmlspecialchars($pg['name']); ?></a><?php endforeach; ?>
+                    </div>
+                </div>
+                <?php endforeach; ?>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($has_records || $program_affiliations): ?>
+        <p class="acc-note"><i class="fas fa-circle-info"></i> Only records confirmed by the college administration are listed. For verification, please contact the college or the relevant organization directly.</p>
+        <?php endif; ?>
     </div>
 </section>
 

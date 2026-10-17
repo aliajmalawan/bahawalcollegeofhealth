@@ -1,5 +1,6 @@
 <?php
 require_once 'includes/config.php';
+require_once 'includes/course_helper.php';
 $page_title = 'Courses & Programs';
 $page_description = 'Browse Doctor of Pharmacy, Physical Therapy, Medical Lab Technology and other health sciences programs offered at Bahawal College of Health Sciences.';
 
@@ -173,31 +174,21 @@ $courses_cta_content = getCoursesCta();
     background:#0D1048; transform:translateY(-2px);
     box-shadow:0 8px 22px rgba(23,22,91,0.3); color:#fff;
 }
+.cr-actions { display:flex; gap:10px; flex-wrap:wrap; }
+.cr-details {
+    display:inline-flex; align-items:center; gap:7px;
+    background:transparent; color:var(--primary-color);
+    border:1px solid rgba(23,22,91,0.25);
+    padding:9px 18px; border-radius:9px;
+    font-size:13px; font-weight:700; text-decoration:none;
+    transition:all 0.3s ease;
+}
+.cr-details:hover { background:rgba(23,22,91,0.06); border-color:var(--primary-color); color:var(--primary-color); }
+.cr-card-top h3 a { color:inherit; text-decoration:none; }
+.cr-card-top h3 a:hover { color:var(--primary-color); }
 
 /* Fee Breakdown */
-.cr-fee-box {
-    background:#F5F9FC; border:1px solid rgba(23,22,91,0.1);
-    border-radius:12px; padding:12px 14px; margin-top:2px;
-}
-.cr-fee-row {
-    display:flex; justify-content:space-between; align-items:center;
-    font-size:12.5px; color:var(--text-light);
-    padding:4px 0;
-}
-.cr-fee-row span:last-child { color:var(--text-dark); font-weight:600; }
-.cr-fee-row.cr-fee-total {
-    border-top:1px dashed rgba(23,22,91,0.18);
-    margin-top:4px; padding-top:8px;
-    font-size:13.5px; font-weight:700; color:var(--primary-color);
-}
-.cr-fee-row.cr-fee-total span:last-child { color:var(--primary-color); font-weight:800; }
-.cr-fee-note {
-    display:flex; align-items:flex-start; gap:6px;
-    font-size:10.5px; color:#DC2626; margin-top:8px;
-    padding-top:8px; border-top:1px solid rgba(23,22,91,0.08);
-    line-height:1.5;
-}
-.cr-fee-note i { margin-top:2px; flex-shrink:0; }
+<?php echo renderCourseFeeStyles(); ?>
 .cr-meta-line {
     display:flex; align-items:flex-start; gap:7px;
     font-size:11.5px; color:var(--text-light);
@@ -297,63 +288,8 @@ $courses_cta_content = getCoursesCta();
 </section>
 
 <?php
-// ── Define default courses with categories ──
-$default_courses = [
-    // Regular Programs
-    ['id'=>null,'icon'=>'fa-graduation-cap','cat'=>'regular','cat_label'=>'Regular Program',
-     'name'=>'Matric (9th & 10th)',
-     'description'=>'Complete matriculation in Science, Arts & Computer Science groups with experienced teachers and modern methods.',
-     'duration'=>'2 Years','fee'=>'5,000'],
-    ['id'=>null,'icon'=>'fa-atom','cat'=>'regular','cat_label'=>'Regular Program',
-     'name'=>'FSc Pre-Engineering',
-     'description'=>'For students aspiring engineering careers — Physics, Chemistry, Mathematics with practical lab work.',
-     'duration'=>'2 Years','fee'=>'6,000'],
-    ['id'=>null,'icon'=>'fa-stethoscope','cat'=>'regular','cat_label'=>'Regular Program',
-     'name'=>'FSc Pre-Medical',
-     'description'=>'For future medical professionals — Biology, Chemistry, Physics with MDCAT preparation focus.',
-     'duration'=>'2 Years','fee'=>'6,000'],
-    ['id'=>null,'icon'=>'fa-laptop','cat'=>'regular','cat_label'=>'Regular Program',
-     'name'=>'ICS (Computer Science)',
-     'description'=>'Combines Mathematics with Computer Science — perfect for students interested in IT and technology.',
-     'duration'=>'2 Years','fee'=>'6,000'],
-    // Test Prep
-    ['id'=>null,'icon'=>'fa-pencil-alt','cat'=>'test','cat_label'=>'Test Prep',
-     'name'=>'ECAT Preparation',
-     'description'=>'Intensive preparation for Engineering College Admission Test — all patterns, practice questions & strategies.',
-     'duration'=>'3–6 Months','fee'=>'8,000'],
-    ['id'=>null,'icon'=>'fa-heartbeat','cat'=>'test','cat_label'=>'Test Prep',
-     'name'=>'MDCAT Preparation',
-     'description'=>'Comprehensive Medical & Dental College Admission Test prep with expert faculty and practice tests.',
-     'duration'=>'3–6 Months','fee'=>'8,000'],
-    ['id'=>null,'icon'=>'fa-plane','cat'=>'test','cat_label'=>'Test Prep',
-     'name'=>'IELTS Preparation',
-     'description'=>'Full IELTS preparation — Listening, Reading, Writing, Speaking with expert guidance and mock tests.',
-     'duration'=>'2–3 Months','fee'=>'7,000'],
-    // Short Courses
-    ['id'=>null,'icon'=>'fa-laptop-code','cat'=>'short','cat_label'=>'Short Course',
-     'name'=>'Computer Programming',
-     'description'=>'Modern languages: C++, Python, Java & Web Development. Hands-on projects and practical coding experience.',
-     'duration'=>'6 Months','fee'=>'4,000'],
-    ['id'=>null,'icon'=>'fa-globe','cat'=>'short','cat_label'=>'Short Course',
-     'name'=>'Web Development',
-     'description'=>'HTML, CSS, JavaScript, PHP & MySQL. Build real-world websites and full-stack applications.',
-     'duration'=>'6 Months','fee'=>'5,000'],
-    ['id'=>null,'icon'=>'fa-comments','cat'=>'short','cat_label'=>'Short Course',
-     'name'=>'Spoken English',
-     'description'=>'Interactive course focused on fluency, pronunciation, and building communication confidence.',
-     'duration'=>'3 Months','fee'=>'3,000'],
-    ['id'=>null,'icon'=>'fa-calculator','cat'=>'short','cat_label'=>'Short Course',
-     'name'=>'Advanced Mathematics',
-     'description'=>'Calculus, Algebra, Trigonometry & more — for competitive exams and higher studies.',
-     'duration'=>'6 Months','fee'=>'4,000'],
-    ['id'=>null,'icon'=>'fa-flask','cat'=>'short','cat_label'=>'Short Course',
-     'name'=>'Physics & Chemistry',
-     'description'=>'In-depth courses with practical demonstrations and problem-solving for all academic levels.',
-     'duration'=>'6 Months','fee'=>'4,500'],
-];
-
-// Use DB data if available, otherwise use defaults
-$courses_to_show = !empty($db_courses) ? $db_courses : $default_courses;
+// Only real programs from the database are listed — no placeholder courses or fees
+$courses_to_show = $db_courses;
 
 // Category meta
 $cat_meta = [
@@ -409,7 +345,8 @@ foreach($courses_to_show as $c){
             $cat  = $course['cat'] ?? 'default';
             $meta = $cat_meta[$cat] ?? $cat_meta['default'];
             $icon = $course['icon'] ?? 'fa-book';
-            $link = $course['id'] ? "admission.php?course={$course['id']}" : "admission.php";
+            $link   = "admission.php?course=" . (int)$course['id'];
+            $detail = "course.php?id=" . (int)$course['id'];
         ?>
             <div class="cr-card" data-cat="<?php echo htmlspecialchars($cat); ?>"
                  data-cr-delay="<?php echo ($idx % 3) * 90; ?>">
@@ -424,7 +361,7 @@ foreach($courses_to_show as $c){
                         <i class="fas <?php echo htmlspecialchars($icon); ?>"
                            style="color:<?php echo $meta['color']; ?>;"></i>
                     </div>
-                    <h3><?php echo htmlspecialchars($course['name']); ?></h3>
+                    <h3><a href="<?php echo $detail; ?>"><?php echo htmlspecialchars($course['name']); ?></a></h3>
                     <p><?php echo htmlspecialchars($course['description']); ?></p>
 
                     <?php if(!empty($course['affiliation']) || !empty($course['department']) || !empty($course['eligibility'])): ?>
@@ -452,36 +389,25 @@ foreach($courses_to_show as $c){
                     </div>
                     <?php endif; ?>
 
-                    <?php
-                    $has_fee = $course['admission_fee'] !== null || $course['initial_fee'] !== null || $course['semester_fee'] !== null || $course['total_fee'] !== null;
-                    if ($has_fee):
-                    ?>
-                    <div class="cr-fee-box">
-                        <?php if($course['admission_fee'] !== null): ?>
-                        <div class="cr-fee-row"><span>Admission Fee</span><span>Rs. <?php echo number_format($course['admission_fee']); ?></span></div>
-                        <?php endif; ?>
-                        <?php if($course['initial_fee'] !== null): ?>
-                        <div class="cr-fee-row"><span>Initial Fee</span><span>Rs. <?php echo number_format($course['initial_fee']); ?></span></div>
-                        <?php endif; ?>
-                        <?php if($course['semester_fee'] !== null): ?>
-                        <div class="cr-fee-row"><span><?php echo htmlspecialchars($course['fee_period']); ?> Fee</span><span>Rs. <?php echo number_format($course['semester_fee']); ?> / <?php echo htmlspecialchars($course['fee_period']); ?></span></div>
-                        <?php endif; ?>
-                        <?php if($course['total_fee'] !== null): ?>
-                        <div class="cr-fee-row cr-fee-total"><span>Total Fee</span><span>Rs. <?php echo number_format($course['total_fee']); ?></span></div>
-                        <?php endif; ?>
-                        <div class="cr-fee-note">
-                            <i class="fas fa-circle-exclamation"></i>
-                            <span>Examination Fee, Verification Fee &amp; University Charges are <strong>Not Included</strong></span>
-                        </div>
-                    </div>
-                    <?php endif; ?>
+                    <?php echo renderCourseFeeBox($course); ?>
 
-                    <a href="<?php echo $link; ?>" class="cr-enroll">
-                        Enroll Now <i class="fas fa-arrow-right" style="font-size:11px;"></i>
-                    </a>
+                    <div class="cr-actions">
+                        <a href="<?php echo $link; ?>" class="cr-enroll">
+                            Enroll Now <i class="fas fa-arrow-right" style="font-size:11px;"></i>
+                        </a>
+                        <a href="<?php echo $detail; ?>" class="cr-details">
+                            <i class="fas fa-circle-info" style="font-size:11px;"></i> View Details
+                        </a>
+                    </div>
                 </div>
             </div>
         <?php endforeach; ?>
+        <?php if (empty($courses_to_show)): ?>
+            <div class="cr-empty">
+                <i class="fas fa-book-open" style="font-size:28px;color:var(--primary-color);display:block;margin-bottom:10px;"></i>
+                Program details will be published soon. Please <a href="contact.php">contact the admission office</a> for information.
+            </div>
+        <?php endif; ?>
         </div>
     </div>
 </section>

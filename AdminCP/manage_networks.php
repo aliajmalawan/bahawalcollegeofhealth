@@ -59,7 +59,10 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $name = mysqli_real_escape_string($conn, trim($_POST['name'] ?? ''));
     $location = mysqli_real_escape_string($conn, trim($_POST['location'] ?? ''));
     $description = mysqli_real_escape_string($conn, trim($_POST['description'] ?? ''));
-    $website = mysqli_real_escape_string($conn, trim($_POST['website'] ?? ''));
+    $website_raw = trim($_POST['website'] ?? '');
+    if ($website_raw !== '' && !preg_match('#^https?://#i', $website_raw)) $website_raw = 'https://' . $website_raw;
+    if ($website_raw !== '' && !filter_var($website_raw, FILTER_VALIDATE_URL)) $website_raw = '';
+    $website = mysqli_real_escape_string($conn, $website_raw);
     $display_order = intval($_POST['display_order'] ?? 0);
     $status = ($_POST['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active';
 
@@ -152,7 +155,7 @@ $show_form = $edit_partner || $_SERVER['REQUEST_METHOD'] === 'POST';
         </div>
 
         <div style="background:#e7f3ff;border-left:4px solid var(--primary-color);border-radius:8px;padding:12px 16px;font-size:13px;color:var(--text-dark);margin-bottom:22px;">
-            <i class="fas fa-circle-info"></i> Only add institutions/organizations you have a real, verified affiliation with — this list is shown publicly on the "Our Networks" page. Partner Hospitals &amp; Clinical Training Partners are managed separately under <a href="manage_clinical_training.php" style="color:var(--primary-color);font-weight:700;">Clinical Training</a> and appear automatically on the Our Networks page.
+            <i class="fas fa-circle-info"></i> Only add institutions/organizations you have a real, verified affiliation with — this list is shown publicly on the "Our Networks" page. Hospitals are managed separately under <a href="manage_clinical_training.php" style="color:var(--primary-color);font-weight:700;">Clinical Training</a> and appear automatically on the Our Networks page &mdash; those marked <strong>Verified partnership</strong> are shown as Partner Hospitals, the rest as Clinical Training Sites.
         </div>
 
         <?php if ($message): ?>

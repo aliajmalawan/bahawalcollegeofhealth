@@ -95,6 +95,9 @@ if (isset($_POST['save_society'])) {
     $focus_area = mysqli_real_escape_string($conn, trim($_POST['focus_area'] ?? ''));
     $meeting_info = mysqli_real_escape_string($conn, trim($_POST['meeting_info'] ?? ''));
     $status = mysqli_real_escape_string($conn, $_POST['status'] ?? 'active');
+    $soc_icon = preg_replace('/[^a-z0-9-]/', '', strtolower(trim($_POST['icon'] ?? ''))) ?: 'fa-people-group';
+    if (strpos($soc_icon, 'fa-') !== 0) $soc_icon = 'fa-' . $soc_icon;
+    $soc_order = intval($_POST['display_order'] ?? 0);
 
     $image_path = '';
     if (isset($_FILES['image']) && $_FILES['image']['error'] == 0) {
@@ -119,12 +122,12 @@ if (isset($_POST['save_society'])) {
         if ($image_path) {
             $old = mysqli_fetch_assoc(mysqli_query($conn, "SELECT image FROM student_societies WHERE id = $id"));
             if ($old && !empty($old['image']) && file_exists('../' . $old['image'])) unlink('../' . $old['image']);
-            $query = "UPDATE student_societies SET name='$name', description='$description', focus_area='$focus_area', meeting_info='$meeting_info', image='$image_path', status='$status' WHERE id=$id";
+            $query = "UPDATE student_societies SET name='$name', description='$description', focus_area='$focus_area', meeting_info='$meeting_info', icon='$soc_icon', display_order=$soc_order, image='$image_path', status='$status' WHERE id=$id";
         } else {
-            $query = "UPDATE student_societies SET name='$name', description='$description', focus_area='$focus_area', meeting_info='$meeting_info', status='$status' WHERE id=$id";
+            $query = "UPDATE student_societies SET name='$name', description='$description', focus_area='$focus_area', meeting_info='$meeting_info', icon='$soc_icon', display_order=$soc_order, status='$status' WHERE id=$id";
         }
     } else {
-        $query = "INSERT INTO student_societies (name, description, focus_area, meeting_info, image, status) VALUES ('$name', '$description', '$focus_area', '$meeting_info', '$image_path', '$status')";
+        $query = "INSERT INTO student_societies (name, description, focus_area, meeting_info, icon, display_order, image, status) VALUES ('$name', '$description', '$focus_area', '$meeting_info', '$soc_icon', $soc_order, '$image_path', '$status')";
     }
     if (mysqli_query($conn, $query)) {
         redirectBackStudentLife('societies', 'Society saved successfully!');
@@ -494,6 +497,16 @@ $tab_labels = [
                             <option value="active" <?php echo (!$edit_society || $edit_society['status']=='active') ? 'selected':''; ?>>Active</option>
                             <option value="inactive" <?php echo ($edit_society && $edit_society['status']=='inactive') ? 'selected':''; ?>>Inactive</option>
                         </select>
+                    </div>
+                </div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+                    <div class="form-group">
+                        <label for="soc_icon">Icon (Font Awesome, shown when no image)</label>
+                        <input id="soc_icon" type="text" name="icon" value="<?php echo $edit_society ? htmlspecialchars($edit_society['icon'] ?: 'fa-people-group') : 'fa-people-group'; ?>" placeholder="e.g., fa-microphone">
+                    </div>
+                    <div class="form-group">
+                        <label for="soc_order">Display Order</label>
+                        <input id="soc_order" type="number" name="display_order" min="0" value="<?php echo $edit_society ? (int) $edit_society['display_order'] : 0; ?>">
                     </div>
                 </div>
                 <div class="form-group">

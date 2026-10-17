@@ -14,6 +14,16 @@ if ($pr) {
 }
 $has_any = count($groups['ongoing']) + count($groups['upcoming']) + count($groups['completed']) > 0;
 
+// Category filter chips — built only from categories admins actually entered
+$categories = [];
+foreach ($groups as $items) {
+    foreach ($items as $p) {
+        $c = trim((string) $p['category']);
+        if ($c !== '') $categories[strtolower($c)] = $c;
+    }
+}
+asort($categories, SORT_NATURAL | SORT_FLAG_CASE);
+
 $status_meta = [
     'ongoing'   => ['label' => 'Ongoing Projects',   'badge' => 'In Progress', 'icon' => 'fa-spinner',       'color' => '#09A9D9', 'bg' => 'rgba(9,169,217,0.1)',  'sub' => 'Projects and initiatives currently underway.'],
     'upcoming'  => ['label' => 'Upcoming Projects',  'badge' => 'Coming Up',   'icon' => 'fa-calendar-plus', 'color' => '#F59E0B', 'bg' => 'rgba(245,158,11,0.1)', 'sub' => 'Planned projects and initiatives on the horizon.'],
@@ -130,6 +140,19 @@ $status_meta = [
 .prj-page-empty i { font-size:52px; color:var(--border-color); margin-bottom:18px; display:block; }
 .prj-page-empty h3 { color:var(--text-dark); font-size:19px; margin:0 0 8px; }
 .prj-page-empty p { color:var(--text-light); font-size:14px; margin:0 auto; max-width:440px; }
+
+/* --- Category filter + card links --- */
+.prj-filter-wrap { background:#fff; border-bottom:1px solid rgba(23,22,91,0.08); padding:14px 0; }
+.prj-filter { display:flex; flex-wrap:wrap; gap:8px; justify-content:center; }
+.prj-chip { padding:7px 16px; border-radius:50px; border:1px solid rgba(23,22,91,0.2); background:#fff; color:var(--text-light); font-size:12.5px; font-weight:600; cursor:pointer; font-family:inherit; transition:all 0.25s ease; }
+.prj-chip:hover { border-color:var(--primary-color); color:var(--primary-color); }
+.prj-chip.active { background:var(--primary-color); border-color:var(--primary-color); color:#fff; }
+.prj-card h3 a { color:inherit; text-decoration:none; }
+.prj-card h3 a:hover { color:var(--primary-color); }
+.prj-card-img a { display:block; width:100%; height:100%; }
+.prj-more { display:inline-flex; align-items:center; gap:6px; margin-top:12px; font-size:13px; font-weight:700; color:var(--primary-color); text-decoration:none; }
+.prj-more:hover { gap:9px; }
+.prj-filter-empty { display:none; text-align:center; color:var(--text-light); padding:40px 20px; font-size:14px; }
 </style>
 
 <!-- HERO -->
@@ -148,6 +171,17 @@ $status_meta = [
     </div>
 </section>
 
+<?php if ($has_any && count($categories) > 1): ?>
+<div class="prj-filter-wrap">
+    <div class="container prj-filter" role="group" aria-label="Filter projects by category">
+        <button type="button" class="prj-chip active" data-cat="">All Categories</button>
+        <?php foreach ($categories as $key => $label): ?>
+        <button type="button" class="prj-chip" data-cat="<?php echo htmlspecialchars($key); ?>"><?php echo htmlspecialchars($label); ?></button>
+        <?php endforeach; ?>
+    </div>
+</div>
+<?php endif; ?>
+
 <?php if (!$has_any): ?>
 <section class="prj-section">
     <div class="container">
@@ -161,10 +195,11 @@ $status_meta = [
 <?php else: ?>
 <?php $alt = true; foreach (['ongoing', 'upcoming', 'completed'] as $status):
     $items = $groups[$status];
+    if (!$items) continue;
     $meta = $status_meta[$status];
     $alt = !$alt;
 ?>
-<section class="prj-section <?php echo $alt ? 'prj-alt' : ''; ?>">
+<section class="prj-section prj-group <?php echo $alt ? 'prj-alt' : ''; ?>">
     <div class="container">
         <div class="prj-sh">
             <div class="prj-sh-badge" style="color:<?php echo $meta['color']; ?>;border-color:<?php echo $meta['color']; ?>44;background:<?php echo $meta['bg']; ?>;"><i class="fas <?php echo $meta['icon']; ?>" style="font-size:9px;"></i> <?php echo $meta['badge']; ?></div>
@@ -175,15 +210,18 @@ $status_meta = [
         <div class="prj-grid">
             <?php if (count($items) > 0): ?>
                 <?php foreach ($items as $i => $p):
-                    $uid = $status . '-' . $i;
+                    $detail = 'project.php?id=' . (int) $p['id'];
+                    $has_page = trim((string) $p['details']) !== '';
                 ?>
-                <div class="prj-card">
+                <div class="prj-card" data-cat="<?php echo htmlspecialchars(strtolower(trim((string) $p['category']))); ?>">
                     <div class="prj-card-img">
+                        <?php if ($has_page): ?><a href="<?php echo $detail; ?>" tabindex="-1" aria-hidden="true"><?php endif; ?>
                         <?php if (!empty($p['image'])): ?>
                             <img src="<?php echo htmlspecialchars($p['image']); ?>" alt="<?php echo htmlspecialchars($p['title']); ?>" loading="lazy">
                         <?php else: ?>
                             <i class="fas fa-diagram-project"></i>
                         <?php endif; ?>
+                        <?php if ($has_page): ?></a><?php endif; ?>
                     </div>
                     <div class="prj-card-body">
                         <div class="prj-tags">
@@ -191,8 +229,11 @@ $status_meta = [
                             <?php if (!empty($p['category'])): ?>
                             <span class="prj-cat-tag"><?php echo htmlspecialchars($p['category']); ?></span>
                             <?php endif; ?>
+                            <?php if (!empty($p['is_foundation'])): ?>
+                            <span class="prj-cat-tag" style="background:rgba(22,163,74,0.1);color:#15803D;"><i class="fas fa-hand-holding-heart"></i> Foundation</span>
+                            <?php endif; ?>
                         </div>
-                        <h3><?php echo htmlspecialchars($p['title']); ?></h3>
+                        <h3><?php if ($has_page): ?><a href="<?php echo $detail; ?>"><?php endif; ?><?php echo htmlspecialchars($p['title']); ?><?php if ($has_page): ?></a><?php endif; ?></h3>
                         <?php if (!empty($p['project_date'])): ?>
                         <div class="prj-date"><i class="fas fa-calendar-days"></i> <?php echo date('d M Y', strtotime($p['project_date'])); ?></div>
                         <?php endif; ?>
@@ -200,11 +241,8 @@ $status_meta = [
                         <p class="prj-desc"><?php echo htmlspecialchars($p['description']); ?></p>
                         <?php endif; ?>
 
-                        <?php if (!empty($p['details'])): ?>
-                        <div class="prj-details" id="prj-details-<?php echo $uid; ?>"><?php echo htmlspecialchars($p['details']); ?></div>
-                        <button type="button" class="prj-toggle" onclick="prjToggle('<?php echo $uid; ?>', this)">
-                            <span>View Details</span> <i class="fas fa-chevron-down"></i>
-                        </button>
+                        <?php if ($has_page): ?>
+                        <a href="<?php echo $detail; ?>" class="prj-more">View Details <i class="fas fa-arrow-right"></i></a>
                         <?php endif; ?>
                     </div>
                 </div>
@@ -221,14 +259,30 @@ $status_meta = [
 <?php endforeach; ?>
 <?php endif; ?>
 
+<?php if ($has_any && count($categories) > 1): ?>
+<div class="container"><p class="prj-filter-empty" id="prjFilterEmpty">No projects in this category yet.</p></div>
 <script>
-function prjToggle(uid, btn) {
-    var panel = document.getElementById('prj-details-' + uid);
-    var open = panel.style.display === 'block';
-    panel.style.display = open ? 'none' : 'block';
-    btn.classList.toggle('open', !open);
-    btn.querySelector('span').textContent = open ? 'View Details' : 'Hide Details';
-}
+(function () {
+    var chips = document.querySelectorAll('.prj-chip');
+    chips.forEach(function (chip) {
+        chip.addEventListener('click', function () {
+            var cat = chip.dataset.cat, any = false;
+            chips.forEach(function (c) { c.classList.toggle('active', c === chip); });
+            document.querySelectorAll('.prj-group').forEach(function (sec) {
+                var shown = 0;
+                sec.querySelectorAll('.prj-card').forEach(function (card) {
+                    var on = !cat || card.dataset.cat === cat;
+                    card.style.display = on ? '' : 'none';
+                    if (on) shown++;
+                });
+                sec.style.display = shown ? '' : 'none';
+                if (shown) any = true;
+            });
+            document.getElementById('prjFilterEmpty').style.display = any ? 'none' : 'block';
+        });
+    });
+})();
 </script>
+<?php endif; ?>
 
 <?php include 'includes/footer.php'; ?>
