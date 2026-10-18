@@ -21,7 +21,7 @@ if ($isLocalEnv) {
     define('DB_HOST', 'localhost');
     define('DB_USER', 'root');
     define('DB_PASS', '');
-    define('DB_NAME', 'bahalwalcollege');
+    define('DB_NAME', 'bahawalcollegeofhealth');
 } else {
     // ---------------------------------------------------------------
     // LIVE CPANEL DATABASE — used automatically once this same file is
